@@ -28,80 +28,141 @@ const InterviewCard = async ({
 
   const badgeColor =
     {
-      Behavioral: "bg-light-400",
-      Mixed: "bg-light-600",
-      Technical: "bg-light-800",
-    }[normalizedType] || "bg-light-600";
+      Behavioral: "bg-light-400/90 backdrop-blur-sm",
+      Mixed: "bg-light-600/90 backdrop-blur-sm",
+      Technical: "bg-light-800/90 backdrop-blur-sm",
+    }[normalizedType] || "bg-light-600/90 backdrop-blur-sm";
 
   const formattedDate = dayjs(
     feedback?.createdAt || createdAt || Date.now()
   ).format("MMM D, YYYY");
 
   return (
-    <div className="card-border hover-glow w-[360px] max-sm:w-full min-h-96">
-      <div className="card-interview">
-        <div>
-          {/* Type Badge */}
+    <div className="group relative w-full h-auto">
+      {/* Glassmorphism Card Container */}
+      <div className="
+        relative w-full h-full
+        bg-[#002049]
+        backdrop-blur-[10px]
+        border border-white/20 dark:border-white/10
+        rounded-2xl
+        shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]
+        shadow-lg shadow-slate-200/10 dark:shadow-slate-900/20
+        transition-all duration-300 ease-out
+        hover:shadow-xl hover:shadow-slate-200/20 dark:hover:shadow-slate-900/30
+        hover:border-white/30 dark:hover:border-white/20
+        hover:bg-[#002049]/90
+        active:scale-[0.98] active:duration-150
+        motion-reduce:transition-none motion-reduce:hover:scale-100
+      ">
+        <div className="p-6 sm:p-8">
+          {/* Type Badge - Floating */}
           <div
             className={cn(
-              "absolute top-0 right-0 w-fit px-4 py-2 rounded-bl-lg",
-              badgeColor
+              "absolute top-4 right-4 w-fit px-4 py-2 rounded-lg",
+              "backdrop-blur-sm",
+              badgeColor,
+              "transition-all duration-300 ease-out",
+              "group-hover:scale-105 motion-reduce:group-hover:scale-100"
             )}
           >
-            <p className="badge-text ">{normalizedType}</p>
+            <p className="text-xs font-semibold text-white dark:text-slate-100">
+              {normalizedType}
+            </p>
           </div>
 
-          {/* Cover Image */}
-          <Image
-            src={getRandomInterviewCover()}
-            alt="cover-image"
-            width={90}
-            height={90}
-            className="rounded-full object-fit size-[90px]"
-          />
+          {/* Content Container */}
+          <div className="flex flex-col h-full space-y-4">
+            {/* Header Section */}
+            <div className="flex items-start space-x-4">
+              <div className="relative flex-shrink-0">
+                <Image
+                  src={getRandomInterviewCover()}
+                  alt="cover-image"
+                  width={80}
+                  height={80}
+                  className="rounded-full object-cover size-20 sm:size-24 border-2 border-white/50 dark:border-slate-700/50 transition-transform duration-300 group-hover:scale-105 motion-reduce:group-hover:scale-100"
+                />
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xl sm:text-2xl font-bold text-white capitalize leading-tight">
+                  {role} Interview
+                </h3>
+                
+                {/* Date & Score */}
+                <div className="flex flex-wrap items-center gap-4 mt-2">
+                  <div className="flex items-center gap-2 text-sm text-white/80">
+                    <Image
+                      src="/calendar.svg"
+                      width={16}
+                      height={16}
+                      alt="calendar"
+                      className="opacity-70"
+                    />
+                    <span className="font-medium">{formattedDate}</span>
+                  </div>
 
-          {/* Interview Role */}
-          <h3 className="mt-5 capitalize">{role} Interview</h3>
-
-          {/* Date & Score */}
-          <div className="flex flex-row gap-5 mt-3">
-            <div className="flex flex-row gap-2">
-              <Image
-                src="/calendar.svg"
-                width={22}
-                height={22}
-                alt="calendar"
-              />
-              <p>{formattedDate}</p>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Image 
+                      src="/star.svg" 
+                      width={16} 
+                      height={16} 
+                      alt="star" 
+                      className="opacity-70"
+                    />
+                    <span className="font-semibold text-white">
+                      {feedback?.totalScore || "---"}/100
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="flex flex-row gap-2 items-center">
-              <Image src="/star.svg" width={22} height={22} alt="star" />
-              <p>{feedback?.totalScore || "---"}/100</p>
+            {/* Feedback Text */}
+            <div className="flex-1">
+              <p className="text-sm sm:text-base text-white/90 leading-relaxed line-clamp-2 sm:line-clamp-3">
+                {feedback?.finalAssessment ||
+                  "You haven't taken this interview yet. Take it now to improve your skills."}
+              </p>
+            </div>
+
+            {/* Footer Section */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t border-white/20 dark:border-slate-700/20">
+              <div className="flex-1 min-w-0">
+                <DisplayTechIcons 
+                  techStack={techstack} 
+                  className="justify-start"
+                />
+              </div>
+              
+              <Button className="
+                relative w-full sm:w-auto
+                bg-gradient-to-r from-indigo-600 to-purple-600
+                hover:from-indigo-700 hover:to-purple-700
+                text-white font-semibold
+                rounded-lg px-6 py-2.5
+                transition-all duration-300 ease-out
+                hover:shadow-lg hover:shadow-indigo-500/25
+                active:scale-95 active:duration-150
+                motion-reduce:transition-none motion-reduce:hover:scale-100
+                focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
+                dark:focus:ring-offset-slate-900
+              ">
+                <PrefetchLink
+                  href={
+                    feedback
+                      ? `/interview/${interviewId}/feedback`
+                      : `/interview/${interviewId}`
+                  }
+                  className="w-full"
+                >
+                  {feedback ? "Check Feedback" : "Start Interview"}
+                </PrefetchLink>
+              </Button>
             </div>
           </div>
-
-          {/* Feedback or Placeholder Text */}
-          <p className="line-clamp-2 mt-5">
-            {feedback?.finalAssessment ||
-              "You haven't taken this interview yet. Take it now to improve your skills."}
-          </p>
-        </div>
-
-        <div className="flex flex-row justify-between">
-          <DisplayTechIcons techStack={techstack} />
-
-          <Button className="btn-primary">
-            <PrefetchLink
-              href={
-                feedback
-                  ? `/interview/${interviewId}/feedback`
-                  : `/interview/${interviewId}`
-              }
-            >
-              {feedback ? "Check Feedback" : "View Interview"}
-            </PrefetchLink>
-          </Button>
         </div>
       </div>
     </div>
