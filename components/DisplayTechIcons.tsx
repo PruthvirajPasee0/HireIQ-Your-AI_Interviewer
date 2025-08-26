@@ -6,13 +6,14 @@ const DisplayTechIcons = async ({ techStack, className }: TechIconProps & { clas
   const techIcons = await getTechLogos(techStack);
 
   return (
-    <div className="flex flex-row">
+    <div className="flex flex-row items-center">
       {techIcons.slice(0, 3).map(({ tech, url }, index) => (
         <div
           key={tech}
           className={cn(
-            "relative group bg-dark-300 rounded-full p-2 flex flex-center",
-            index >= 1 && "-ml-3"
+            "relative group bg-white/10 rounded-full flex items-center justify-center border border-white/20",
+            "size-8 sm:size-10",
+            index >= 1 && "-ml-2"
           )}
         >
           <span className="tech-tooltip">{tech}</span>
@@ -22,7 +23,7 @@ const DisplayTechIcons = async ({ techStack, className }: TechIconProps & { clas
             alt={tech}
             width={100}
             height={100}
-            className="size-5"
+            className="size-4 sm:size-5 object-contain"
           />
         </div>
       ))}

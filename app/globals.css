@@ -272,6 +272,15 @@
     @apply flex items-center justify-center mx-auto max-w-7xl min-h-screen max-sm:px-4 max-sm:py-8;
   }
 
+  /* Responsive styles for hero banner metrics */
+  .hero-banner {
+    @apply max-sm:flex-col max-sm:items-start max-sm:gap-4;
+  }
+
+  .hero-banner .glass-card {
+    @apply max-sm:w-full max-sm:px-4 max-sm:py-3 max-sm:text-xs;
+  }
+
   .root-layout {
     @apply flex mx-auto max-w-7xl flex-col gap-12 my-12 px-16 max-sm:px-4 max-sm:my-8;
   }
@@ -282,6 +291,35 @@
 
   .interviews-section {
     @apply flex flex-wrap gap-4 max-lg:flex-col w-full items-stretch;
+  }
+
+  .interviews-section > * {
+    @apply flex-1;
+  }
+
+  .interviews-section .card-interview,
+  .interviews-section .group {
+    @apply h-full;
+  }
+
+  .interviews-section .grid {
+    @apply grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+  }
+
+  .interviews-section .grid > div {
+    @apply flex;
+  }
+
+  .interviews-section .grid > div > div {
+    @apply flex-1;
+  }
+
+  .interviews-section .grid .group {
+    @apply w-full h-full;
+  }
+
+  .interviews-section .grid .group > div {
+    @apply h-full flex flex-col;
   }
 
   .interview-text {

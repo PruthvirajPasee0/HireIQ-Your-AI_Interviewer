@@ -56,10 +56,10 @@ const InterviewCard = async ({
         motion-reduce:transition-none motion-reduce:hover:scale-100
       ">
         <div className="p-6 sm:p-8">
-          {/* Type Badge - Floating */}
+          {/* Type Badge - Positioned to prevent overlap */}
           <div
             className={cn(
-              "absolute top-4 right-4 w-fit px-4 py-2 rounded-lg",
+              "absolute top-3 right-3 w-fit px-3 py-1.5 rounded-lg",
               "backdrop-blur-sm",
               badgeColor,
               "transition-all duration-300 ease-out",
@@ -74,7 +74,7 @@ const InterviewCard = async ({
           {/* Content Container */}
           <div className="flex flex-col h-full space-y-4">
             {/* Header Section */}
-            <div className="flex items-start space-x-4">
+            <div className="flex items-start space-x-4 pr-20 sm:pr-24">
               <div className="relative flex-shrink-0">
                 <Image
                   src={getRandomInterviewCover()}
@@ -87,7 +87,7 @@ const InterviewCard = async ({
               </div>
               
               <div className="flex-1 min-w-0">
-                <h3 className="text-xl sm:text-2xl font-bold text-white capitalize leading-tight">
+                <h3 className="text-lg sm:text-xl font-bold text-white capitalize leading-tight">
                   {role} Interview
                 </h3>
                 
@@ -121,7 +121,7 @@ const InterviewCard = async ({
             </div>
 
             {/* Feedback Text */}
-            <div className="flex-1">
+            <div className="flex-1 min-h-[60px]">
               <p className="text-sm sm:text-base text-white/90 leading-relaxed line-clamp-2 sm:line-clamp-3">
                 {feedback?.finalAssessment ||
                   "You haven't taken this interview yet. Take it now to improve your skills."}
@@ -133,7 +133,7 @@ const InterviewCard = async ({
               <div className="flex-1 min-w-0">
                 <DisplayTechIcons 
                   techStack={techstack} 
-                  className="justify-start"
+                  className="justify-start items-center"
                 />
               </div>
               

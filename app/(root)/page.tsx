@@ -25,19 +25,33 @@ async function Home() {
     <>
       {/* User Profile Section */}
       <section className="hero-banner">
-        <div className="flex items-center gap-6 max-w-2xl">
-          <Image 
-            src={user?.profileURL || "/user-avatar.png"} 
-            alt="User profile" 
-            width={64} 
-            height={64} 
-            className="rounded-full object-cover size-16 border-2 border-white/30"
-          />
-          <div className="flex flex-col gap-2">
-            <h2 className="text-2xl font-bold">Welcome back, {user?.name || "User"}!</h2>
-            <div className="flex flex-wrap gap-4 text-lg text-white/80">
-              <p>Interviews completed: {userInterviews?.length || 0}</p>
-              <p>Last practice: {userInterviews?.[0]?.createdAt ? new Date(userInterviews[0].createdAt).toLocaleDateString() : "Never"}</p>
+        <div className="flex items-center justify-between gap-6 w-full">
+          <div className="flex items-center gap-6">
+            <Image 
+              src={user?.profileURL || "/user-avatar.png"} 
+              alt="User profile" 
+              width={64} 
+              height={64} 
+              className="rounded-full object-cover size-16 border-2 border-white/30"
+            />
+            <div className="flex flex-col gap-2">
+              <h2 className="text-2xl font-bold">Welcome back, {user?.name || "User"}!</h2>
+            </div>
+          </div>
+          
+          <div className="glass-card px-6 py-4 rounded-2xl border border-white/10 backdrop-blur-xl bg-white/[0.06] shadow-lg">
+            <div className="flex flex-col gap-2 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="text-white/70">Interviews completed:</span>
+                <span className="font-semibold text-white">{userInterviews?.length || 0}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-white/70">Last practice:</span>
+                <span className="font-semibold text-white">
+                  {userInterviews?.[0]?.createdAt ? new Date(userInterviews[0].createdAt).toLocaleDateString() : "Never"}
+                </span>
+              </div>
             </div>
           </div>
         </div>
