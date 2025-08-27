@@ -39,23 +39,9 @@ const InterviewCard = async ({
 
   return (
     <div className="group relative w-full h-auto">
-      {/* Glassmorphism Card Container */}
-      <div className="
-        relative w-full h-full
-        bg-[#002049]
-        backdrop-blur-[10px]
-        border border-white/20 dark:border-white/10
-        rounded-2xl
-        shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]
-        shadow-lg shadow-slate-200/10 dark:shadow-slate-900/20
-        transition-all duration-300 ease-out
-        hover:shadow-xl hover:shadow-slate-200/20 dark:hover:shadow-slate-900/30
-        hover:border-white/30 dark:hover:border-white/20
-        hover:bg-[#002049]/90
-        active:scale-[0.98] active:duration-150
-        motion-reduce:transition-none motion-reduce:hover:scale-100
-      ">
-        <div className="p-6 sm:p-8">
+      {/* Themed Glassmorphism Card Container (match sign-in form style) */}
+      <div className="card-interview auth-card">
+        <div className="p-2 sm:p-2">
           {/* Type Badge - Positioned to prevent overlap */}
           <div
             className={cn(
@@ -129,7 +115,7 @@ const InterviewCard = async ({
             </div>
 
             {/* Footer Section */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t border-white/20 dark:border-slate-700/20">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t border-white/10 dark:border-slate-700/20">
               <div className="flex-1 min-w-0">
                 <DisplayTechIcons 
                   techStack={techstack} 
@@ -137,19 +123,7 @@ const InterviewCard = async ({
                 />
               </div>
               
-              <Button className="
-                relative w-full sm:w-auto
-                bg-gradient-to-r from-indigo-600 to-purple-600
-                hover:from-indigo-700 hover:to-purple-700
-                text-white font-semibold
-                rounded-lg px-6 py-2.5
-                transition-all duration-300 ease-out
-                hover:shadow-lg hover:shadow-indigo-500/25
-                active:scale-95 active:duration-150
-                motion-reduce:transition-none motion-reduce:hover:scale-100
-                focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
-                dark:focus:ring-offset-slate-900
-              ">
+              <Button className="btn-primary w-full sm:w-auto">
                 <PrefetchLink
                   href={
                     feedback

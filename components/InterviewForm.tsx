@@ -74,7 +74,7 @@ export default function InterviewForm({ userId }: { userId: string }) {
             <div className="space-y-3">
               <label className="label text-white font-medium tracking-wide">Experience Level</label>
               <select
-                className="input w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+                className="input w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-transparent transition-all duration-200"
                 {...form.register("level")}
               >
                 <option value="junior" className="bg-slate-900 text-white">Junior</option>
@@ -87,7 +87,7 @@ export default function InterviewForm({ userId }: { userId: string }) {
             <div className="space-y-3">
               <label className="label text-white font-medium tracking-wide">Interview Type</label>
               <select
-                className="input w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+                className="input w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-transparent transition-all duration-200"
                 {...form.register("type")}
               >
                 <option value="behavioral" className="bg-slate-900 text-white">Behavioral</option>
@@ -115,21 +115,8 @@ export default function InterviewForm({ userId }: { userId: string }) {
               />
             </div>
 
-            <Button 
-              className="
-                relative w-full
-                bg-gradient-to-r from-indigo-600 to-purple-600
-                hover:from-indigo-700 hover:to-purple-700
-                text-white font-semibold text-lg
-                rounded-lg px-8 py-4
-                transition-all duration-300 ease-out
-                hover:shadow-lg hover:shadow-indigo-500/25
-                active:scale-[0.98] active:duration-150
-                motion-reduce:transition-none motion-reduce:hover:scale-100
-                focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
-                dark:focus:ring-offset-slate-900
-                mt-4
-              "
+            <Button
+              className="btn w-full mt-4"
               type="submit"
             >
               Generate Interview

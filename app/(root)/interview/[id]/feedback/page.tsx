@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import Link from "next/link";
+import PrefetchLink from "@/components/PrefetchLink";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
@@ -138,15 +138,15 @@ const Feedback = async ({ params }: RouteParams) => {
 
       {/* Actions */}
       <div className="buttons">
-        <Button className="btn-secondary flex-1">
-          <Link href="/" prefetch className="flex w-full justify-center">
-            <p className="text-sm font-semibold text-primary-200 text-center">Back to dashboard</p>
-          </Link>
+        <Button asChild className="btn-secondary flex-1">
+          <PrefetchLink href="/" className="flex w-full justify-center">
+            <span className="text-sm font-semibold text-primary-200 text-center">Back to Dashboard</span>
+          </PrefetchLink>
         </Button>
-        <Button className="btn-primary flex-1">
-          <Link href={`/interview/${id}`} prefetch className="flex w-full justify-center">
-            <p className="text-sm font-semibold text-black text-center">Retake Interview</p>
-          </Link>
+        <Button asChild className="btn-primary flex-1">
+          <PrefetchLink href={`/interview/${id}`} className="flex w-full justify-center">
+            <span className="text-sm font-semibold text-black text-center">Retake Interview</span>
+          </PrefetchLink>
         </Button>
       </div>
     </section>
