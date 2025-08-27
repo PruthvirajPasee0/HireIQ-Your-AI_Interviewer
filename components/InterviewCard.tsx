@@ -39,9 +39,9 @@ const InterviewCard = async ({
 
   return (
     <div className="group relative w-full h-auto">
-      {/* Themed Glassmorphism Card Container (match sign-in form style) */}
-      <div className="card-interview auth-card">
-        <div className="p-2 sm:p-2">
+      {/* Sign-in style glassmorphism card */}
+      <div className="auth-card p-0">
+        <div className="p-4 sm:p-5">
           {/* Type Badge - Positioned to prevent overlap */}
           <div
             className={cn(

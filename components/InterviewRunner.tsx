@@ -16,21 +16,15 @@ interface RunnerProps {
 
 type SavedMessage = { role: "user" | "assistant"; content: string };
 
-export default function InterviewRunner({
-  userName,
-  userId,
-  interviewId,
-  questions,
-}: RunnerProps) {
+export default function InterviewRunner({ userName, userId, interviewId, questions }: RunnerProps) {
   const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [messages, setMessages] = useState<SavedMessage[]>([]);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [displayAssistantText, setDisplayAssistantText] = useState<
-    string | null
-  >(null);
+  const [displayAssistantText, setDisplayAssistantText] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
+  const [isGreetingPhase, setIsGreetingPhase] = useState(true);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   // Prevent duplicate speaks in React Strict Mode and track asked base questions
@@ -49,14 +43,11 @@ export default function InterviewRunner({
 
   useEffect(() => {
     // Pre-ask permission to avoid UX hiccups
-    navigator.mediaDevices
-      .getUserMedia({ audio: true })
-      .then((stream) => {
-        stream.getTracks().forEach((t) => t.stop());
-      })
-      .catch(() => {
-        toast.error("Microphone permission is required.");
-      });
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      stream.getTracks().forEach((t) => t.stop());
+    }).catch(() => {
+      toast.error("Microphone permission is required.");
+    });
   }, []);
 
   // Ask the first question and subsequent ones automatically via index change
@@ -70,8 +61,7 @@ export default function InterviewRunner({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text,
-          voice:
-            process.env.NEXT_PUBLIC_DEEPGRAM_TTS_VOICE || "aura-2-odysseus-en",
+          voice: process.env.NEXT_PUBLIC_DEEPGRAM_TTS_VOICE || "aura-2-odysseus-en",
         }),
       });
       if (!res.ok) throw new Error("TTS failed");
@@ -95,19 +85,10 @@ export default function InterviewRunner({
         // Append the assistant message when playback actually starts (unless suppressed)
         audio.onplay = () => {
           if (opts?.record === false) return;
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: text },
-          ]);
+          setMessages((prev) => [...prev, { role: "assistant", content: text }]);
         };
-        audio.onended = () => {
-          URL.revokeObjectURL(url);
-          resolve();
-        };
-        audio.onerror = () => {
-          URL.revokeObjectURL(url);
-          reject(new Error("Audio play failed"));
-        };
+        audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+        audio.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Audio play failed")); };
         audio.play();
       });
     } catch (e: any) {
@@ -145,10 +126,7 @@ export default function InterviewRunner({
     const mr = mediaRecorderRef.current;
     if (!mr) return;
     await new Promise<void>((resolve) => {
-      const handler = () => {
-        mr.removeEventListener("stop", handler);
-        resolve();
-      };
+      const handler = () => { mr.removeEventListener("stop", handler); resolve(); };
       mr.addEventListener("stop", handler);
       mr.stop();
     });
@@ -172,10 +150,7 @@ export default function InterviewRunner({
     }
 
     const transcript: string = data.transcript || "";
-    const allMessages: SavedMessage[] = [
-      ...messages,
-      { role: "user", content: transcript },
-    ];
+    const allMessages: SavedMessage[] = [...messages, { role: "user", content: transcript }];
     setMessages(allMessages);
 
     // Decide next step based on the user's answer (conversational flow)
@@ -188,10 +163,7 @@ export default function InterviewRunner({
       const mr = mediaRecorderRef.current;
       if (recording && mr) {
         await new Promise<void>((resolve) => {
-          const handler = () => {
-            mr.removeEventListener("stop", handler);
-            resolve();
-          };
+          const handler = () => { mr.removeEventListener("stop", handler); resolve(); };
           mr.addEventListener("stop", handler);
           mr.stop();
         });
@@ -209,10 +181,7 @@ export default function InterviewRunner({
         const data = await res.json();
         if (res.ok && data.success) {
           const transcript: string = data.transcript || "";
-          await finalizeInterview([
-            ...messages,
-            { role: "user", content: transcript },
-          ]);
+          await finalizeInterview([...messages, { role: "user", content: transcript }]);
           return;
         }
         // If STT fails, still finalize with prior messages
@@ -227,13 +196,6 @@ export default function InterviewRunner({
   };
 
   const askCurrentQuestion = async () => {
-    // Enforce total question budget (assistant messages count)
-    const askedSoFar = messages.filter((m) => m.role === "assistant").length;
-    const remainingBudget = questions.length - askedSoFar;
-    if (remainingBudget <= 0) {
-      await finalizeInterview(messages);
-      return;
-    }
     const q = questions[currentIndex];
     if (!q) {
       await finalizeInterview(messages);
@@ -252,53 +214,37 @@ export default function InterviewRunner({
 
   // Whenever the current question index advances, ask the next question automatically
   useEffect(() => {
-    // First question is triggered by the greeting effect to avoid double-speaking
-    if (currentIndex === 0) return;
+    // Avoid triggering before the greeting flow starts
+    if (!hasStarted || isGreetingPhase) return;
     if (!isSpeaking && !recording && questions[currentIndex]) {
       // Guard against duplicate effect runs (e.g., Strict Mode)
       if (askedSetRef.current.has(currentIndex)) return;
-      askedSetRef.current.add(currentIndex);
       askCurrentQuestion();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentIndex]);
+  }, [currentIndex, hasStarted, isGreetingPhase]);
 
   // Initial greeting before the first question (top-level hook)
   useEffect(() => {
-    // Guard against double-mount in React Strict Mode by persisting a flag per interview
-    const greetKey = `greeted_${interviewId}`;
-    if (typeof window !== "undefined") {
-      const already = sessionStorage.getItem(greetKey);
-      if (already) return;
-      sessionStorage.setItem(greetKey, "1");
-    }
     if (greetedRef.current) return;
     greetedRef.current = true;
-    const intro = `Hi ${userName}, welcome to your mock interview. Let's begin.`;
+    const intro = `Hello ${userName}! We’ll go through ${questions.length} question${questions.length === 1 ? '' : 's'}. I’ll ask each one, then listen to your answer. You can say “skip” to move on. Let’s begin.`;
     (async () => {
-      // Show transcript area and display the greeting text while playing
+      // Start greeting phase so effect won't trigger base questions prematurely
+      setIsGreetingPhase(true);
       setHasStarted(true);
       await speak(intro, { record: false });
-      // Start with the first base question
+      // End greeting phase and proceed to first base question
+      setIsGreetingPhase(false);
       await askCurrentQuestion();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Decide next question or follow-up based on transcript and conversation state
-  const decideNextStep = async (
-    latestTranscript: string,
-    allMsgs: SavedMessage[]
-  ) => {
+  const decideNextStep = async (latestTranscript: string, allMsgs: SavedMessage[]) => {
     try {
       const baseNext = questions[currentIndex + 1] || null;
-      // Compute remaining total question budget (including follow-ups)
-      const askedSoFar = allMsgs.filter((m) => m.role === "assistant").length;
-      const remainingBudget = Math.max(0, questions.length - askedSoFar);
-      if (remainingBudget <= 0) {
-        await finalizeInterview(allMsgs);
-        return;
-      }
       setIsProcessing(true);
       const res = await fetch("/api/next-question", {
         method: "POST",
@@ -306,29 +252,16 @@ export default function InterviewRunner({
         body: JSON.stringify({
           messages: allMsgs,
           baseQuestion: baseNext,
-          // Treat remainingCount as overall remaining budget on the server
-          remainingCount: remainingBudget,
+          // Remaining base questions count (follow-ups should not consume base budget)
+          remainingCount: Math.max(0, questions.length - (currentIndex + 1)),
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data?.success)
-        throw new Error(data?.error || "next-question failed");
+      if (!res.ok || !data?.success) throw new Error(data?.error || "next-question failed");
 
       // type: 'followup' | 'base' | 'end'
       if (data.type === "followup" && data.question) {
         // Ask a short contextual follow-up without advancing index
-        // Ensure we still have budget before speaking
-        const askedNow = (
-          messages.concat({
-            role: "user",
-            content: latestTranscript,
-          }) as SavedMessage[]
-        ).filter((m) => m.role === "assistant").length;
-        const remNow = Math.max(0, questions.length - askedNow);
-        if (remNow <= 0) {
-          await finalizeInterview(allMsgs);
-          return;
-        }
         await speak(data.question);
         if (!recording) await startRecording();
         return;
@@ -390,32 +323,19 @@ export default function InterviewRunner({
 
   return (
     <>
-      {/* Top progress + textual status */}
+      {/* Compact status row: X/Y Questions • Status */}
+      <div className="w-full mb-2 flex items-center justify-between text-white/80 text-sm">
+        <span>{askedSetRef.current.size}/{Math.max(1, questions.length)} Questions</span>
+        <span>
+          {isSpeaking ? "Speaking" : recording ? "Listening" : isProcessing ? "Processing" : "Idle"}
+        </span>
+      </div>
+      {/* Top progress bar */}
       <div className="w-full mb-4">
-        <div className="w-full flex items-center justify-between mb-2">
-          <p className="text-white/80 text-sm">
-            {(() => {
-              const total = Math.max(1, questions.length);
-              const current = Math.min(askedSetRef.current.size, total);
-              return `Question ${current}/${total}`;
-            })()}
-          </p>
-          <p className="text-white/60 text-sm">
-            {isSpeaking
-              ? "Status: Speaking"
-              : recording
-              ? "Status: Listening"
-              : isProcessing
-              ? "Status: Processing"
-              : "Status: Idle"}
-          </p>
-        </div>
         <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
           {(() => {
             const total = Math.max(1, questions.length);
-            const progress = Math.round(
-              (askedSetRef.current.size / total) * 100
-            );
+            const progress = Math.round((askedSetRef.current.size / total) * 100);
             return (
               <div className="progress" style={{ width: `${progress}%` }} />
             );
@@ -424,15 +344,9 @@ export default function InterviewRunner({
       </div>
 
       <div className="call-view">
-        <div className="card-interviewer auth-card p-7">
+        <div className="card-interviewer">
           <div className="avatar">
-            <Image
-              src="/ai-avatar.png"
-              alt="ai"
-              width={65}
-              height={54}
-              className="object-cover"
-            />
+            <Image src="/ai-avatar.png" alt="ai" width={65} height={54} className="object-cover" />
             {isSpeaking && <span className="animate-speak" />}
           </div>
           <h3>AI Interviewer</h3>
@@ -455,14 +369,8 @@ export default function InterviewRunner({
         </div>
 
         <div className="card-border">
-          <div className="card-content auth-card p-7">
-            <Image
-              src="/user-avatar.png"
-              alt="me"
-              width={539}
-              height={539}
-              className="rounded-full object-cover size-[120px]"
-            />
+          <div className="card-content">
+            <Image src="/user-avatar.png" alt="me" width={539} height={539} className="rounded-full object-cover size-[120px]" />
             <h3>{userName}</h3>
             {/* User status chip on the card */}
             {recording && (
@@ -475,27 +383,16 @@ export default function InterviewRunner({
       </div>
 
       {/* Transcript / Status area */}
-      {(isSpeaking ||
-        displayAssistantText ||
-        recording ||
-        isProcessing ||
-        !hasStarted) && (
+      {(isSpeaking || displayAssistantText || recording || isProcessing) && (
         <div className="transcript-border">
           <div className="transcript">
-            {!hasStarted ? (
-              <p className="animate-fadeIn">
-                Hi {userName}, press Start Answer when you're ready. I'll begin
-                now.
-              </p>
-            ) : isSpeaking || displayAssistantText ? (
-              <p
-                className={cn(
-                  "transition-opacity duration-500 opacity-0",
-                  "animate-fadeIn opacity-100"
+            {isSpeaking || displayAssistantText ? (
+              <div className="flex flex-col items-center gap-1 w-full">
+                {askedSetRef.current.size > 0 && (
+                  <span className="text-xs text-white/60">Question {Math.min(questions.length, Math.max(1, askedSetRef.current.size))} of {Math.max(1, questions.length)}</span>
                 )}
-              >
-                {displayAssistantText}
-              </p>
+                <p className={cn("transition-opacity duration-500 opacity-0", "animate-fadeIn opacity-100")}>{displayAssistantText}</p>
+              </div>
             ) : recording ? (
               <p className="animate-fadeIn">Listening...</p>
             ) : isProcessing ? (
@@ -509,11 +406,7 @@ export default function InterviewRunner({
       <div className="w-full flex flex-col items-center gap-3">
         <div className="flex gap-3">
           {!recording ? (
-            <button
-              className="btn-primary"
-              onClick={startRecording}
-              disabled={isSpeaking}
-            >
+            <button className="btn-primary" onClick={startRecording} disabled={isSpeaking || isProcessing}>
               Start Answer
             </button>
           ) : (

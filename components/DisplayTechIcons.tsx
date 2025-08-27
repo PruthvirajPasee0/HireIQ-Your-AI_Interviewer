@@ -6,7 +6,7 @@ const DisplayTechIcons = async ({ techStack, className }: TechIconProps & { clas
   const techIcons = await getTechLogos(techStack);
 
   return (
-    <div className="flex flex-row items-center">
+    <div className={cn("flex flex-row items-center", className)}>
       {techIcons.slice(0, 3).map(({ tech, url }, index) => (
         <div
           key={tech}
@@ -15,7 +15,9 @@ const DisplayTechIcons = async ({ techStack, className }: TechIconProps & { clas
             "size-8 sm:size-10",
             index >= 1 && "-ml-2"
           )}
+          aria-label={tech}
         >
+          {/* Tooltip removed per request (no hover names) */}
           <Image
             src={url}
             alt={tech}

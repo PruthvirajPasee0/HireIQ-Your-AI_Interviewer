@@ -77,17 +77,34 @@ export async function getFeedbackByInterviewId(
 ): Promise<Feedback | null> {
   const { interviewId, userId } = params;
 
-  const querySnapshot = await db
-    .collection("feedback")
-    .where("interviewId", "==", interviewId)
-    .where("userId", "==", userId)
-    .limit(1)
-    .get();
+  // Try ordered query (fastest) — may require a composite index
+  try {
+    const querySnapshot = await db
+      .collection("feedback")
+      .where("interviewId", "==", interviewId)
+      .where("userId", "==", userId)
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
 
-  if (querySnapshot.empty) return null;
+    if (querySnapshot.empty) return null;
 
-  const feedbackDoc = querySnapshot.docs[0];
-  return { id: feedbackDoc.id, ...feedbackDoc.data() } as Feedback;
+    const feedbackDoc = querySnapshot.docs[0];
+    return { id: feedbackDoc.id, ...feedbackDoc.data() } as Feedback;
+  } catch (e) {
+    // Fallback without orderBy to avoid composite index requirement
+    const fallbackSnap = await db
+      .collection("feedback")
+      .where("interviewId", "==", interviewId)
+      .where("userId", "==", userId)
+      .get();
+
+    if (fallbackSnap.empty) return null;
+
+    const items = fallbackSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as Feedback[];
+    items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    return items[0];
+  }
 }
 
 export async function getLatestInterviews(

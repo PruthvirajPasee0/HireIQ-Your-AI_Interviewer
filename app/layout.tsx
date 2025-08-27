@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { Mona_Sans } from "next/font/google";
 
 import "./globals.css";
-import RoutePrefetcher from "@/components/RoutePrefetcher";
 
 const monaSans = Mona_Sans({
   variable: "--font-mona-sans",
@@ -23,7 +22,6 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${monaSans.className} antialiased pattern`}>
-        <RoutePrefetcher routes={["/", "/interview", "/taken", "/settings"]} />
         {children}
 
         <Toaster />
