@@ -4,6 +4,7 @@ import Image from "next/image";
 
 import { Button } from "./ui/button";
 import DisplayTechIcons from "./DisplayTechIcons";
+import { MessageSquareText, Play } from "lucide-react";
 
 import { cn, getRandomInterviewCover } from "@/lib/utils";
 import { getFeedbackByInterviewId } from "@/lib/actions/general.action";
@@ -38,9 +39,18 @@ const InterviewCard = async ({
   ).format("MMM D, YYYY");
 
   return (
-    <div className="group relative w-full h-auto">
+    <div className="group relative w-full h-auto transition-all duration-300 hover:-translate-y-0.5 hover:ring-1 hover:ring-primary-200/40 hover:shadow-2xl">
+      {/* Hover glow background */}
+      <div
+        className="pointer-events-none absolute -inset-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        style={{
+          background:
+            "radial-gradient(800px 300px at 110% -10%, rgba(59,130,246,0.14), transparent 60%)",
+        }}
+      />
+
       {/* Sign-in style glassmorphism card */}
-      <div className="auth-card p-0">
+      <div className="auth-card p-0 relative overflow-hidden">
         <div className="p-4 sm:p-5">
           {/* Type Badge - Positioned to prevent overlap */}
           <div
@@ -130,9 +140,19 @@ const InterviewCard = async ({
                       ? `/interview/${interviewId}/feedback`
                       : `/interview/${interviewId}`
                   }
-                  className="w-full"
+                  className="w-full flex items-center justify-center gap-2"
                 >
-                  {feedback ? "Check Feedback" : "Start Interview"}
+                  {feedback ? (
+                    <>
+                      <MessageSquareText size={18} />
+                      <span>Check Feedback</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play size={18} />
+                      <span>Start Interview</span>
+                    </>
+                  )}
                 </PrefetchLink>
               </Button>
             </div>

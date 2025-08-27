@@ -115,15 +115,20 @@ export const feedbackSchema = z.object({
 export const interviewCovers = [
   "/covers/adobe.png",
   "/covers/amazon.png",
+  "/covers/cisco.png",
   "/covers/facebook.png",
+  "/covers/google.png",
   "/covers/hostinger.png",
+  "/covers/netflix.png",
   "/covers/pinterest.png",
   "/covers/quora.png",
   "/covers/reddit.png",
   "/covers/skype.png",
   "/covers/spotify.png",
+  "/covers/tcs.png",
   "/covers/telegram.png",
   "/covers/tiktok.png",
+  "/covers/walmart.png",
   "/covers/yahoo.png",
 ];
 

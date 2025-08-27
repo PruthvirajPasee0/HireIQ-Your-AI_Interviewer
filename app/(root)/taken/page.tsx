@@ -31,19 +31,22 @@ const TakenInterviewsPage = async () => {
         </Button>
       </div>
 
-      <div className="interviews-section">
+      <div className="interviews-section p-0">
         {hasPastInterviews ? (
-          userInterviews?.map((interview) => (
-            <InterviewCard
-              key={interview.id}
-              userId={user.id}
-              interviewId={interview.id}
-              role={interview.role}
-              type={interview.type}
-              techstack={interview.techstack}
-              createdAt={interview.createdAt}
-            />
-          ))
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+            {userInterviews?.map((interview) => (
+              <div key={interview.id} className="transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/20">
+                <InterviewCard
+                  userId={user.id}
+                  interviewId={interview.id}
+                  role={interview.role}
+                  type={interview.type}
+                  techstack={interview.techstack}
+                  createdAt={interview.createdAt}
+                />
+              </div>
+            ))}
+          </div>
         ) : (
           <p>You haven&apos;t taken any interviews yet.</p>
         )}

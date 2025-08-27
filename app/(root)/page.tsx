@@ -25,8 +25,8 @@ async function Home() {
     <>
       {/* User Profile Section */}
       <section className="hero-banner">
-        <div className="flex items-center justify-between gap-6 w-full">
-          <div className="flex items-center gap-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 w-full">
+          <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto">
             <Image 
               src={user?.profileURL || "/user-avatar.png"} 
               alt="User profile" 
@@ -38,8 +38,8 @@ async function Home() {
               <h2 className="text-2xl font-bold">Welcome back, {user?.name || "User"}!</h2>
             </div>
           </div>
-          
-          <div className="glass-card px-6 py-4 rounded-2xl border border-white/10 backdrop-blur-xl bg-white/[0.06] shadow-lg">
+
+          <div className="glass-card px-6 py-4 rounded-2xl border border-white/10 backdrop-blur-2xl bg-white/[0.08] shadow-lg w-full sm:w-auto">
             <div className="flex flex-col gap-2 text-sm">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -68,6 +68,8 @@ async function Home() {
           </div>
         </div>
       </section>
+
+      {/* Filters removed as requested */}
 
       <section className="flex flex-col gap-6 mt-8">
         <h2>Your Interviews</h2>

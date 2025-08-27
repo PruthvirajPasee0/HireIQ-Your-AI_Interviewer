@@ -17,9 +17,8 @@ export default function MobileNav({ user }: MobileNavProps) {
   return (
     <div className="flex items-center justify-between">
       <Sheet>
-        <SheetTrigger className="glass-card px-3 py-2 flex items-center gap-2">
+        <SheetTrigger className="glass-card p-2 rounded-xl flex items-center justify-center">
           <Menu className="size-5" />
-          <span className="font-medium">Menu</span>
         </SheetTrigger>
         <SheetContent side="left" className="bg-transparent border-none p-0">
           <SheetTitle className="sr-only">Mobile navigation</SheetTitle>
