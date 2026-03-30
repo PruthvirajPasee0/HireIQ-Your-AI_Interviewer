@@ -6,7 +6,7 @@ import WelcomeScreen from "@/components/landing/WelcomeScreen";
 export default function LandingLayout({ children }: { children: ReactNode }) {
   return (
     <WelcomeScreen>
-      <div className="min-h-screen relative overflow-hidden landing-bg">
+      <div className="min-h-screen relative landing-bg">
         <Navbar />
         <main>{children}</main>
         <Footer />
