@@ -4,7 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -33,7 +40,8 @@ export default function SettingsForm({ user }: { user: Partial<User> | null }) {
         body: JSON.stringify(values),
       });
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.message || "Failed to update");
+      if (!res.ok || !json.success)
+        throw new Error(json.message || "Failed to update");
       toast.success("Profile updated");
       router.refresh();
     } catch (e: any) {

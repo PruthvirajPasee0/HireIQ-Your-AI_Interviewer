@@ -21,7 +21,9 @@ export default async function SettingsPage() {
             className="rounded-full object-cover"
           />
           <div className="min-w-0">
-            <p className="text-lg font-semibold truncate">{user?.name || "User"}</p>
+            <p className="text-lg font-semibold truncate">
+              {user?.name || "User"}
+            </p>
             <p className="text-light-400 truncate">{user?.email}</p>
           </div>
         </div>
@@ -43,7 +45,9 @@ export default async function SettingsPage() {
           </p>
           <div className="mt-3">
             <Button asChild variant="outline">
-              <Link href="/sign-out" prefetch>Sign out</Link>
+              <Link href="/sign-out" prefetch>
+                Sign out
+              </Link>
             </Button>
           </div>
         </div>

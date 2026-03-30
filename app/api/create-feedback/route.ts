@@ -6,18 +6,24 @@ import { feedbackSchema } from "@/constants";
 
 export async function POST(request: Request) {
   try {
-    const { interviewId, userId, transcript, feedbackId } = await request.json();
+    const { interviewId, userId, transcript, feedbackId } =
+      await request.json();
 
     if (!interviewId || !userId || !Array.isArray(transcript)) {
-      return Response.json({ success: false, error: "Missing required fields" }, { status: 400 });
+      return Response.json(
+        { success: false, error: "Missing required fields" },
+        { status: 400 }
+      );
     }
 
-    const formattedTranscript = (transcript as Array<{ role: string; content: string }>)
+    const formattedTranscript = (
+      transcript as Array<{ role: string; content: string }>
+    )
       .map((s) => `- ${s.role}: ${s.content}\n`)
       .join("");
 
     const { object } = await generateObject({
-      model: google("gemini-2.0-flash-001", { structuredOutputs: true }),
+      model: google("gemini-2.5-flash-lite", { structuredOutputs: true }),
       schema: feedbackSchema,
       prompt: `
         You are an AI interviewer analyzing a mock interview. Your task is to evaluate the candidate based on structured categories. Be thorough and detailed in your analysis. Don't be lenient with the candidate. If there are mistakes or areas for improvement, point them out.
@@ -31,7 +37,8 @@ export async function POST(request: Request) {
         - Cultural Fit: Alignment with company values and job role.
         - Confidence and Clarity: Confidence in responses, engagement, and clarity.
       `,
-      system: "You are a professional interviewer analyzing a mock interview. Your task is to evaluate the candidate based on structured categories",
+      system:
+        "You are a professional interviewer analyzing a mock interview. Your task is to evaluate the candidate based on structured categories",
     });
 
     const feedback = {
@@ -51,9 +58,15 @@ export async function POST(request: Request) {
 
     await ref.set(feedback);
 
-    return Response.json({ success: true, feedbackId: ref.id }, { status: 200 });
+    return Response.json(
+      { success: true, feedbackId: ref.id },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("/api/create-feedback error:", error);
-    return Response.json({ success: false, error: String(error) }, { status: 500 });
+    return Response.json(
+      { success: false, error: String(error) },
+      { status: 500 }
+    );
   }
 }

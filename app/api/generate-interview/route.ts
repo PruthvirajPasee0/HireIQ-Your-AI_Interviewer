@@ -6,16 +6,20 @@ import { getRandomInterviewCover } from "@/lib/utils";
 
 export async function POST(request: Request) {
   try {
-    const { type, role, level, techstack, amount, userid } = await request.json();
+    const { type, role, level, techstack, amount, userid } =
+      await request.json();
 
     if (!userid || !role || !level || !type || !amount || !techstack) {
-      return Response.json({ success: false, error: "Missing required fields" }, { status: 400 });
+      return Response.json(
+        { success: false, error: "Missing required fields" },
+        { status: 400 }
+      );
     }
 
     const amountInt = Math.max(1, Math.min(50, Number(amount) || 0));
 
     const { text: raw } = await generateText({
-      model: google("gemini-2.0-flash-001"),
+      model: google("gemini-2.5-flash-lite"),
       temperature: 0.95,
       topP: 0.95,
       prompt: `Prepare ${amountInt} interview questions.
@@ -43,22 +47,30 @@ export async function POST(request: Request) {
     }
 
     const arr = Array.isArray(parsed) ? parsed : [];
-    const cleaned = Array.from(new Set(
-      arr
-        .filter((q) => typeof q === "string")
-        .map((q: string) => q.trim())
-        .filter((q: string) => q.length > 0 && q.length <= 240)
-    ));
+    const cleaned = Array.from(
+      new Set(
+        arr
+          .filter((q) => typeof q === "string")
+          .map((q: string) => q.trim())
+          .filter((q: string) => q.length > 0 && q.length <= 240)
+      )
+    );
     const finalQuestions = cleaned.slice(0, amountInt);
     if (finalQuestions.length === 0) {
-      return Response.json({ success: false, error: "Failed to generate questions" }, { status: 502 });
+      return Response.json(
+        { success: false, error: "Failed to generate questions" },
+        { status: 502 }
+      );
     }
 
     const interview = {
       role: role as string,
       type: type as string,
       level: level as string,
-      techstack: String(techstack).split(",").map((t) => t.trim()).filter(Boolean),
+      techstack: String(techstack)
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
       questions: finalQuestions,
       userId: userid as string,
       finalized: true,
@@ -71,7 +83,10 @@ export async function POST(request: Request) {
     return Response.json({ success: true, id: docRef.id }, { status: 200 });
   } catch (error) {
     console.error("/api/generate-interview error:", error);
-    return Response.json({ success: false, error: String(error) }, { status: 500 });
+    return Response.json(
+      { success: false, error: String(error) },
+      { status: 500 }
+    );
   }
 }
 

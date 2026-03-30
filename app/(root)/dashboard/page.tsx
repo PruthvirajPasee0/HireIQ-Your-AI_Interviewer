@@ -27,15 +27,17 @@ async function Home() {
       <section className="hero-banner">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 w-full">
           <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto">
-            <Image 
-              src={user?.profileURL || "/user-avatar.png"} 
-              alt="User profile" 
-              width={64} 
-              height={64} 
+            <Image
+              src={user?.profileURL || "/user-avatar.png"}
+              alt="User profile"
+              width={64}
+              height={64}
               className="rounded-full object-cover size-16 border-2 border-white/30"
             />
             <div className="flex flex-col gap-2">
-              <h2 className="text-2xl font-bold">Welcome back, {user?.name || "User"}!</h2>
+              <h2 className="text-2xl font-bold">
+                Welcome back, {user?.name || "User"}!
+              </h2>
             </div>
           </div>
 
@@ -44,12 +46,16 @@ async function Home() {
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span className="text-white/70">Interviews completed:</span>
-                <span className="font-semibold text-white">{userInterviews?.length || 0}</span>
+                <span className="font-semibold text-white">
+                  {userInterviews?.length || 0}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-white/70">Last practice:</span>
                 <span className="font-semibold text-white">
-                  {userInterviews?.[0]?.createdAt ? new Date(userInterviews[0].createdAt).toLocaleDateString() : "Never"}
+                  {userInterviews?.[0]?.createdAt
+                    ? new Date(userInterviews[0].createdAt).toLocaleDateString()
+                    : "Never"}
                 </span>
               </div>
             </div>
@@ -60,10 +66,14 @@ async function Home() {
       <section className="hero-banner">
         <div className="flex flex-col gap-4 max-w-2xl">
           <h2>Get Interview-Ready with AI-Powered Practice & Feedback</h2>
-          <p className="text-lg">Practice real interview questions & get instant feedback</p>
+          <p className="text-lg">
+            Practice real interview questions & get instant feedback
+          </p>
           <div className="flex items-center gap-3">
             <Button asChild className="btn-primary max-sm:w-full">
-              <Link href="/interview" prefetch>Start an Interview</Link>
+              <Link href="/interview" prefetch>
+                Start an Interview
+              </Link>
             </Button>
           </div>
         </div>
@@ -78,7 +88,10 @@ async function Home() {
           {hasPastInterviews ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {userInterviews?.map((interview) => (
-                <div key={interview.id} className="transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/20">
+                <div
+                  key={interview.id}
+                  className="transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/20"
+                >
                   <InterviewCard
                     userId={user?.id}
                     interviewId={interview.id}
@@ -103,7 +116,10 @@ async function Home() {
           {hasUpcomingInterviews ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {allInterview?.map((interview) => (
-                <div key={interview.id} className="transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/20">
+                <div
+                  key={interview.id}
+                  className="transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/20"
+                >
                   <InterviewCard
                     userId={user?.id}
                     interviewId={interview.id}

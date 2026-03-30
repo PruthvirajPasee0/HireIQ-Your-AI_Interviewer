@@ -35,7 +35,7 @@ const AuthForm = ({ type }: { type: FormType }) => {
   const router = useRouter();
   // Prefetch common auth routes to speed up tab switching and redirects
   useEffect(() => {
-    ["/", "/sign-in", "/sign-up"].forEach((r) => {
+    ["/dashboard", "/sign-in", "/sign-up"].forEach((r) => {
       try { router.prefetch(r); } catch {}
     });
   }, [router]);
@@ -97,8 +97,8 @@ const AuthForm = ({ type }: { type: FormType }) => {
         });
 
         toast.success("Signed in successfully.");
-        router.prefetch("/");
-        router.push("/");
+        router.prefetch("/dashboard");
+        router.push("/dashboard");
       }
     } catch (error) {
       console.log(error);
@@ -127,8 +127,8 @@ const AuthForm = ({ type }: { type: FormType }) => {
 
       toast.success("Signed in with Google");
       // Warm dashboard for instant avatar/profile update
-      try { router.prefetch("/"); } catch {}
-      router.push("/");
+      try { router.prefetch("/dashboard"); } catch {}
+      router.push("/dashboard");
     } catch (error) {
       console.log(error);
       toast.error("Google sign-in error");

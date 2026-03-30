@@ -18,7 +18,7 @@ export async function createFeedback(params: CreateFeedbackParams) {
       .join("");
 
     const { object } = await generateObject({
-      model: google("gemini-2.0-flash-001", {
+      model: google("gemini-2.5-flash-lite", {
         structuredOutputs: true,
       }),
       schema: feedbackSchema,
@@ -101,8 +101,13 @@ export async function getFeedbackByInterviewId(
 
     if (fallbackSnap.empty) return null;
 
-    const items = fallbackSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as Feedback[];
-    items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    const items = fallbackSnap.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    })) as Feedback[];
+    items.sort((a, b) =>
+      String(b.createdAt).localeCompare(String(a.createdAt))
+    );
     return items[0];
   }
 }
