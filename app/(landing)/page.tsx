@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import HeroSection from "@/components/landing/HeroSection";
-import TrustedBySection from "@/components/landing/TrustedBySection";
+
 import FeaturesSection from "@/components/landing/FeaturesSection";
 import HowItWorksSection from "@/components/landing/HowItWorksSection";
 import StatsSection from "@/components/landing/StatsSection";
@@ -17,7 +17,6 @@ export default function LandingPage() {
   return (
     <>
       <HeroSection />
-      <TrustedBySection />
       <FeaturesSection />
       <HowItWorksSection />
       <StatsSection />

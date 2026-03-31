@@ -252,117 +252,33 @@ export default function WelcomeScreen({ children }: Props) {
     refs.scene.add(neb);
     refs.nebula = neb;
 
-    // ── Mountains (gradient-shaded blue/black layers) ──
-    const mountainLayers = [
-      {
-        distance: -50, height: 60, segments: 80,
-        peakColor: [0.08, 0.15, 0.35],  // steel blue highlight
-        baseColor: [0.02, 0.02, 0.06],  // near black
-        rimColor:  [0.12, 0.25, 0.55],  // blue rim light
-        opacity: 1.0,
-      },
-      {
-        distance: -100, height: 80, segments: 70,
-        peakColor: [0.06, 0.12, 0.30],  // muted blue
-        baseColor: [0.01, 0.01, 0.04],
-        rimColor:  [0.10, 0.20, 0.50],
-        opacity: 0.9,
-      },
-      {
-        distance: -150, height: 100, segments: 60,
-        peakColor: [0.05, 0.10, 0.28],  // deeper blue
-        baseColor: [0.01, 0.01, 0.03],
-        rimColor:  [0.08, 0.18, 0.45],
-        opacity: 0.75,
-      },
-      {
-        distance: -200, height: 120, segments: 50,
-        peakColor: [0.04, 0.08, 0.22],  // farthest — faded blue
-        baseColor: [0.0, 0.0, 0.02],
-        rimColor:  [0.06, 0.14, 0.38],
-        opacity: 0.55,
-      },
+    // ── Mountains (deep purple-to-blue gradient layers) ──
+    const layers = [
+      { distance: -50, height: 60, color: 0x0f0a1e, opacity: 1 },     // near-black purple
+      { distance: -100, height: 80, color: 0x1a1145, opacity: 0.85 },  // dark indigo
+      { distance: -150, height: 100, color: 0x1e1b6e, opacity: 0.65 }, // deep violet
+      { distance: -200, height: 120, color: 0x162055, opacity: 0.45 }, // ocean blue
     ];
-
-    mountainLayers.forEach((l, idx) => {
+    layers.forEach((l, idx) => {
       const pts: THREE.Vector2[] = [];
-      const segs = l.segments;
-
-      // More realistic jagged peaks
-      for (let i = 0; i <= segs; i++) {
-        const t = i / segs;
-        const x = (t - 0.5) * 1000;
-        // Multiple octaves for realistic ridgeline
+      for (let i = 0; i <= 50; i++) {
+        const x = (i / 50 - 0.5) * 1000;
         const y =
-          Math.sin(t * Math.PI * 3.5 + idx * 1.7) * l.height * 0.6 +
-          Math.sin(t * Math.PI * 7 + idx * 0.9) * l.height * 0.25 +
-          Math.sin(t * Math.PI * 14 + idx * 2.3) * l.height * 0.1 +
-          Math.cos(t * Math.PI * 5.5 + idx * 0.5) * l.height * 0.15 -
-          100;
+          Math.sin(i * 0.1) * l.height +
+          Math.sin(i * 0.05) * l.height * 0.5 +
+          Math.random() * l.height * 0.2 - 100;
         pts.push(new THREE.Vector2(x, y));
       }
-      pts.push(new THREE.Vector2(5000, -400));
-      pts.push(new THREE.Vector2(-5000, -400));
-
+      pts.push(new THREE.Vector2(5000, -300));
+      pts.push(new THREE.Vector2(-5000, -300));
       const shape = new THREE.Shape(pts);
       const geo = new THREE.ShapeGeometry(shape);
-      geo.computeBoundingBox();
-
-      const mat = new THREE.ShaderMaterial({
-        uniforms: {
-          uPeakColor: { value: new THREE.Vector3(...l.peakColor) },
-          uBaseColor: { value: new THREE.Vector3(...l.baseColor) },
-          uRimColor:  { value: new THREE.Vector3(...l.rimColor) },
-          uOpacity:   { value: l.opacity },
-          uMinY:      { value: geo.boundingBox!.min.y },
-          uMaxY:      { value: geo.boundingBox!.max.y },
-          uTime:      { value: 0 },
-          uLayerIdx:  { value: idx },
-        },
-        vertexShader: `
-          varying vec2 vUv;
-          varying float vHeight;
-          varying vec3 vPos;
-          uniform float uMinY, uMaxY;
-
-          void main() {
-            vUv = uv;
-            vPos = position;
-            // Normalized height 0 (base) to 1 (peak)
-            vHeight = clamp((position.y - uMinY) / (uMaxY - uMinY), 0.0, 1.0);
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          uniform vec3 uPeakColor, uBaseColor, uRimColor;
-          uniform float uOpacity, uTime, uLayerIdx;
-          varying float vHeight;
-          varying vec3 vPos;
-
-          void main() {
-            // Height gradient: dark at base, lighter at peaks
-            vec3 col = mix(uBaseColor, uPeakColor, pow(vHeight, 0.7));
-
-            // Rim/edge highlight near the top ridge
-            float rimStrength = smoothstep(0.55, 0.95, vHeight) * 0.6;
-            col += uRimColor * rimStrength;
-
-            // Subtle horizontal variation (snow-like streaks on peaks)
-            float streak = sin(vPos.x * 0.05 + uLayerIdx * 2.0) * 0.5 + 0.5;
-            col += vec3(0.03, 0.06, 0.12) * streak * smoothstep(0.7, 1.0, vHeight);
-
-            // Very subtle time-based shimmer on peaks
-            float shimmer = sin(uTime * 0.5 + vPos.x * 0.02) * 0.02;
-            col += vec3(shimmer) * smoothstep(0.6, 1.0, vHeight);
-
-            gl_FragColor = vec4(col, uOpacity);
-          }
-        `,
+      const mat = new THREE.MeshBasicMaterial({
+        color: l.color,
         transparent: true,
+        opacity: l.opacity,
         side: THREE.DoubleSide,
-        depthWrite: idx === 0,
       });
-
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.z = l.distance;
       mesh.position.y = l.distance;
@@ -427,10 +343,6 @@ export default function WelcomeScreen({ children }: Props) {
         const pf = 1 + i * 0.5;
         m.position.x = Math.sin(t * 0.1) * 2 * pf;
         m.position.y = 50 + Math.cos(t * 0.15) * pf;
-        // Update shader time for shimmer effect
-        if ((m.material as THREE.ShaderMaterial).uniforms?.uTime) {
-          (m.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
-        }
       });
 
       refs.composer?.render();
