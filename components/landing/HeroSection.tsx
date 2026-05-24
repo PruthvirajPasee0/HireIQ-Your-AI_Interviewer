@@ -1,26 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatedGroup } from "@/components/ui/animated-group";
 import { ShaderAnimation } from "@/components/ui/shader-animation";
-
-const COMPANY_LOGOS = [
-  { src: "/covers/google.png", alt: "Google" },
-  { src: "/covers/amazon.png", alt: "Amazon" },
-  { src: "/covers/netflix.png", alt: "Netflix" },
-  { src: "/covers/adobe.png", alt: "Adobe" },
-  { src: "/covers/facebook.png", alt: "Facebook" },
-  { src: "/covers/spotify.png", alt: "Spotify" },
-  { src: "/covers/cisco.png", alt: "Cisco" },
-  { src: "/covers/walmart.png", alt: "Walmart" },
-  { src: "/covers/reddit.png", alt: "Reddit" },
-  { src: "/covers/pinterest.png", alt: "Pinterest" },
-  { src: "/covers/yahoo.png", alt: "Yahoo" },
-  { src: "/covers/tiktok.png", alt: "TikTok" },
-];
+import { ContainerScroll } from "@/components/ui/container-scroll-animation";
+import InteractiveDashboardMockup from "@/components/landing/InteractiveDashboardMockup";
+import { Component as PixelLogoGrid } from "@/components/ui/pixel-logo-grid";
 
 const transitionVariants = {
   item: {
@@ -141,18 +128,30 @@ export default function HeroSection() {
         </div>
       </div>
 
-      {/* ═══ DASHBOARD PREVIEW — detailed mockup, NO shader ═══ */}
+      {/* ═══ DASHBOARD PREVIEW — wrapped in scroll-driven 3D card ═══ */}
       <div className="relative bg-black">
-        <AnimatedGroup
-          variants={{
-            container: {
-              visible: {
-                transition: { staggerChildren: 0.05, delayChildren: 0.75 },
-              },
-            },
-            ...transitionVariants,
-          }}
+        <ContainerScroll
+          titleComponent={
+            <div className="px-4">
+              <p className="text-xs md:text-sm uppercase tracking-[0.2em] text-primary-200/80 mb-3">
+                Live preview
+              </p>
+              <h2 className="text-3xl md:text-5xl font-semibold text-white">
+                Your interview hub, one scroll away
+              </h2>
+              <h3 className="text-3xl md:text-[5rem] font-bold mt-1 leading-none bg-gradient-to-r from-indigo-300 via-violet-300 to-amber-200 bg-clip-text text-transparent">
+                Explore the dashboard
+              </h3>
+              <p className="text-sm md:text-base text-white/60 mt-4 max-w-2xl mx-auto">
+                Click around the mockup — switch tabs, open recent interviews,
+                trigger quick actions. This is the actual UX, hot-rendered.
+              </p>
+            </div>
+          }
         >
+          <InteractiveDashboardMockup />
+        </ContainerScroll>
+        <div style={{ display: "none" }} aria-hidden>
           <div className="relative -mr-56 overflow-hidden px-2 sm:mr-0 pt-4 pb-8">
             <div
               aria-hidden
@@ -181,7 +180,7 @@ export default function HeroSection() {
                     {/* Sidebar */}
                     <div className="hidden md:flex flex-col w-52 border-r border-white/8 bg-white/[0.02] p-3 gap-1">
                       <div className="flex items-center gap-2 px-2 mb-4">
-                        <Image src="/logo.svg" alt="Hireiq.ai" width={18} height={16} />
+                        <span />
                         <span className="text-xs font-semibold text-white/80">Hireiq.ai</span>
                       </div>
                       {[
@@ -309,39 +308,14 @@ export default function HeroSection() {
               </div>
             </div>
           </div>
-        </AnimatedGroup>
-      </div>
-
-      {/* ═══ TRUSTED BY — infinite carousel, NO shader ═══ */}
-      <div className="relative bg-black py-16 md:py-24 overflow-hidden">
-        <p className="text-center text-sm text-white/30 uppercase tracking-widest mb-10 px-6">
-          Trusted by candidates at top companies
-        </p>
-
-        {/* Carousel track */}
-        <div className="relative">
-          {/* Fade edges */}
-          <div className="absolute left-0 top-0 bottom-0 w-24 md:w-40 bg-gradient-to-r from-black to-transparent z-10 pointer-events-none" />
-          <div className="absolute right-0 top-0 bottom-0 w-24 md:w-40 bg-gradient-to-l from-black to-transparent z-10 pointer-events-none" />
-
-          <div className="flex animate-logo-scroll gap-16 md:gap-20 w-max">
-            {[...COMPANY_LOGOS, ...COMPANY_LOGOS].map((logo, i) => (
-              <div
-                key={`${logo.alt}-${i}`}
-                className="flex-shrink-0 flex items-center justify-center h-12 grayscale opacity-40 hover:grayscale-0 hover:opacity-90 transition-all duration-300"
-              >
-                <Image
-                  src={logo.src}
-                  alt={logo.alt}
-                  width={120}
-                  height={48}
-                  className="object-contain h-10 w-auto"
-                />
-              </div>
-            ))}
-          </div>
         </div>
       </div>
+
+      {/* ═══ TRUSTED BY — pixel logo grid (replaces old carousel) ═══ */}
+      <PixelLogoGrid
+        badge="Trusted by"
+        heading="Candidates from top companies practice on Hireiq.ai"
+      />
     </section>
   );
 }

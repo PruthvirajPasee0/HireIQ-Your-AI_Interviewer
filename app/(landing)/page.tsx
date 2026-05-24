@@ -3,9 +3,9 @@ import HeroSection from "@/components/landing/HeroSection";
 
 import FeaturesSection from "@/components/landing/FeaturesSection";
 import HowItWorksSection from "@/components/landing/HowItWorksSection";
-import StatsSection from "@/components/landing/StatsSection";
 import TestimonialsSection from "@/components/landing/TestimonialsSection";
-import CTASection from "@/components/landing/CTASection";
+import PricingSection from "@/components/ui/pricing-section-4";
+import { CinematicFooter } from "@/components/ui/motion-footer";
 
 export const metadata: Metadata = {
   title: "Hireiq.ai - AI-Powered Interview Preparation",
@@ -19,9 +19,11 @@ export default function LandingPage() {
       <HeroSection />
       <FeaturesSection />
       <HowItWorksSection />
-      <StatsSection />
       <TestimonialsSection />
-      <CTASection />
+      <section id="pricing">
+        <PricingSection />
+      </section>
+      <CinematicFooter />
     </>
   );
 }

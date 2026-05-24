@@ -2,8 +2,18 @@
 
 # dependencies
 /node_modules
+/worker/node_modules
+/worker/dist
 /.pnp
 .pnp.*
+
+# Self-hosted bot stacks (cloned upstream repos, never committed)
+/infra/attendee/upstream
+/infra/vexa/upstream
+
+# Local agent/IDE caches
+/.agent
+/.claude
 .yarn/*
 !.yarn/patches
 !.yarn/plugins

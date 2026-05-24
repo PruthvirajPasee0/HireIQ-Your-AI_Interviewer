@@ -6,7 +6,7 @@ import Image from "next/image";
 import { toast } from "sonner";
 import { auth } from "@/firebase/client";
 import { useForm } from "react-hook-form";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 
@@ -33,9 +33,12 @@ const authFormSchema = (type: FormType) => {
 
 const AuthForm = ({ type }: { type: FormType }) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const roleParam = searchParams.get("role");
+  const isRecruiterSignup = type === "sign-up" && roleParam === "recruiter";
   // Prefetch common auth routes to speed up tab switching and redirects
   useEffect(() => {
-    ["/dashboard", "/sign-in", "/sign-up"].forEach((r) => {
+    ["/dashboard", "/recruiter", "/sign-in", "/sign-up"].forEach((r) => {
       try { router.prefetch(r); } catch {}
     });
   }, [router]);
@@ -66,6 +69,7 @@ const AuthForm = ({ type }: { type: FormType }) => {
           name: name!,
           email,
           password,
+          role: isRecruiterSignup ? "recruiter" : "candidate",
         });
 
         if (!result.success) {
@@ -156,7 +160,11 @@ const AuthForm = ({ type }: { type: FormType }) => {
           </nav>
         </div>
 
-        <h3 className="text-center">Practice job interviews with AI</h3>
+        <h3 className="text-center">
+          {isRecruiterSignup
+            ? "Create a recruiter account"
+            : "Practice job interviews with AI"}
+        </h3>
 
         <Form {...form}>
           <form

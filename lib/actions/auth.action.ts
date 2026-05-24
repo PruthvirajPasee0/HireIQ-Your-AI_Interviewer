@@ -26,7 +26,7 @@ export async function setSessionCookie(idToken: string) {
 }
 
 export async function signUp(params: SignUpParams) {
-  const { uid, name, email } = params;
+  const { uid, name, email, role } = params;
 
   try {
     // check if user exists in db
@@ -41,8 +41,7 @@ export async function signUp(params: SignUpParams) {
     await db.collection("users").doc(uid).set({
       name,
       email,
-      // profileURL,
-      // resumeURL,
+      role: role === "recruiter" ? "recruiter" : "candidate",
     });
 
     return {
@@ -95,6 +94,7 @@ export async function signIn(params: SignInParams) {
         name: userRecord.displayName || "",
         email: userRecord.email || email,
         profileURL: userRecord.photoURL || "",
+        role: "candidate",
       });
     } else if (signInProvider === "google.com") {
       // Keep the profile photo in sync with Google on Google sign-in

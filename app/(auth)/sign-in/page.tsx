@@ -1,7 +1,7 @@
-import AuthForm from "@/components/AuthForm";
+import AnimatedAuthForm from "@/components/AnimatedAuthForm";
 
 const Page = () => {
-  return <AuthForm type="sign-in" />;
+  return <AnimatedAuthForm type="sign-in" />;
 };
 
 export default Page;
