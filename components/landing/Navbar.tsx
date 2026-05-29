@@ -68,6 +68,7 @@ export default function Navbar() {
             </Link>
             <Link
               href="/sign-up"
+              data-magnetic
               className="px-5 py-2 text-sm font-semibold text-dark-100 bg-gradient-to-b from-white via-white/95 to-white/70 rounded-lg hover:scale-105 active:scale-95 transition-all"
             >
               Get Started
