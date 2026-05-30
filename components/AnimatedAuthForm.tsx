@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,7 @@ import {
   signInWithPopup,
 } from "firebase/auth";
 import { auth } from "@/firebase/client";
-import { signIn, signUp } from "@/lib/actions/auth.action";
+import { getCurrentUser, signIn, signUp } from "@/lib/actions/auth.action";
 import PrefetchLink from "@/components/PrefetchLink";
 
 type FormType = "sign-in" | "sign-up";
@@ -184,7 +184,9 @@ const ROLE_THEME: Record<
     gradientFrom: "#3A1A05",
     gradientVia: "#A04A0A",
     gradientTo: "#FF9B6B",
-    leadCharacter: "#FF9B6B", // orange — candidate
+    // Coral-red so the lead character reads distinctly against the orange
+    // semi-circle character in front of it (was both #FF9B6B — visually merged).
+    leadCharacter: "#E0556B",
     accentCharacter: "#E8D754",
     submitClass: "bg-amber-500 hover:bg-amber-400 text-zinc-900",
   },
@@ -194,10 +196,22 @@ type Props = { type: FormType };
 
 export default function AnimatedAuthForm({ type }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const initialRole: Role =
     searchParams.get("role") === "recruiter" ? "recruiter" : "candidate";
   const [role, setRole] = useState<Role>(initialRole);
+
+  // Keep the URL in sync with the role toggle so the choice is visible and
+  // shareable (and so refreshing the page doesn't silently reset it).
+  const selectRole = (next: Role) => {
+    setRole(next);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("role", next);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  };
 
   const isSignIn = type === "sign-in";
   const theme = ROLE_THEME[role];
@@ -299,7 +313,17 @@ export default function AnimatedAuthForm({ type }: Props) {
   const yellowPos = calcPosition(yellowRef);
   const orangePos = calcPosition(orangeRef);
 
-  const targetAfterAuth = role === "recruiter" ? "/recruiter" : "/dashboard";
+  // Always redirect based on the user's PERSISTED role, not the local toggle.
+  // The toggle is just the choice for new-account creation; for sign-in we
+  // honour whatever the Firestore user doc actually says.
+  const redirectAfterAuth = async () => {
+    const user = await getCurrentUser();
+    if (user?.role === "recruiter") {
+      router.push("/recruiter");
+    } else {
+      router.push("/dashboard");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -313,13 +337,13 @@ export default function AnimatedAuthForm({ type }: Props) {
           setError("Sign in failed. Please try again.");
           return;
         }
-        const res = await signIn({ email, idToken });
+        const res = await signIn({ email, idToken, role });
         if (res?.success === false) {
           setError(res.message || "Sign in failed");
           return;
         }
         toast.success("Signed in");
-        router.push(targetAfterAuth);
+        await redirectAfterAuth();
       } else {
         if (!name.trim()) {
           setError("Name is required");
@@ -360,13 +384,13 @@ export default function AnimatedAuthForm({ type }: Props) {
         setError("Google sign-in failed");
         return;
       }
-      const res = await signIn({ email: userEmail, idToken });
+      const res = await signIn({ email: userEmail, idToken, role });
       if (res?.success === false) {
         setError(res.message || "Server sign-in failed");
         return;
       }
       toast.success("Signed in with Google");
-      router.push(targetAfterAuth);
+      await redirectAfterAuth();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
@@ -655,7 +679,7 @@ export default function AnimatedAuthForm({ type }: Props) {
                 <button
                   key={r}
                   type="button"
-                  onClick={() => setRole(r)}
+                  onClick={() => selectRole(r)}
                   className={`px-4 py-2 rounded-full text-sm transition-colors ${
                     role === r
                       ? r === "recruiter"

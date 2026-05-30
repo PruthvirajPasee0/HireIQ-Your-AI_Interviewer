@@ -8,6 +8,7 @@ import {
   getFeedbackById,
 } from "@/lib/actions/sessions.action";
 import DeleteSessionButton from "@/components/DeleteSessionButton";
+import DownloadPdfButton from "@/components/DownloadPdfButton";
 
 export default async function SessionFeedbackPage({
   params,
@@ -26,8 +27,8 @@ export default async function SessionFeedbackPage({
   const score = feedback?.totalScore ?? 0;
 
   return (
-    <section className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+    <section className="flex flex-col gap-6 print:bg-white print:text-black">
+      <div className="flex items-center justify-between print:hidden">
         <div>
           <h1 className="text-3xl font-semibold">{session.candidateName}</h1>
           <p className="text-white/60">{session.candidateEmail}</p>
@@ -36,6 +37,7 @@ export default async function SessionFeedbackPage({
           <Button asChild variant="secondary">
             <Link href="/recruiter">Back to dashboard</Link>
           </Button>
+          {feedback && <DownloadPdfButton />}
           {(session.status === "ended" || session.status === "failed") && (
             <DeleteSessionButton
               sessionId={session.id}
@@ -45,6 +47,19 @@ export default async function SessionFeedbackPage({
             />
           )}
         </div>
+      </div>
+
+      {/* Print-only header */}
+      <div className="hidden print:block print:mb-6">
+        <h1 className="text-2xl font-bold">
+          Interview Feedback — {session.candidateName}
+        </h1>
+        <p className="text-sm text-gray-600">
+          {session.candidateEmail} ·{" "}
+          {feedback?.createdAt
+            ? dayjs(feedback.createdAt).format("MMM D, YYYY h:mm A")
+            : ""}
+        </p>
       </div>
 
       {!feedback ? (

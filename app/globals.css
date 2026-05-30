@@ -612,3 +612,48 @@
   color: rgba(139, 92, 246, 0.4);
   font-variant-numeric: tabular-nums;
 }
+
+/* Print stylesheet — feedback page exports to PDF cleanly */
+@media print {
+  /* Hide everything outside the report section */
+  body * {
+    visibility: hidden;
+  }
+  .section-feedback,
+  .section-feedback *,
+  section.flex.flex-col.gap-6,
+  section.flex.flex-col.gap-6 * {
+    visibility: visible;
+  }
+  /* Force a white background and dark text everywhere for print */
+  html,
+  body,
+  .dashboard-bg,
+  section,
+  div {
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+  .glass-card {
+    border: 1px solid #ddd !important;
+  }
+  /* Hide sidebars and navigation chrome */
+  aside,
+  nav,
+  .mobile-nav,
+  header,
+  footer {
+    display: none !important;
+  }
+  /* Better link rendering */
+  a {
+    color: black !important;
+    text-decoration: none !important;
+  }
+  /* Avoid bad page breaks inside cards */
+  .glass-card,
+  .rounded-xl {
+    page-break-inside: avoid;
+  }
+}

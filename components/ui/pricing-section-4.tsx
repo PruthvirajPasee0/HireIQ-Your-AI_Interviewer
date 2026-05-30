@@ -138,14 +138,14 @@ export default function PricingSection6() {
 
   return (
     <div
-      className="min-h-screen mx-auto relative bg-black overflow-x-hidden"
+      className="relative bg-black overflow-hidden isolate py-20 md:py-24"
       ref={pricingRef}
     >
       <TimelineContent
         animationNum={4}
         timelineRef={pricingRef}
         customVariants={revealVariants}
-        className="absolute top-0 h-96 w-screen overflow-hidden [mask-image:radial-gradient(50%_50%,white,transparent)]"
+        className="absolute top-0 left-0 right-0 h-96 overflow-hidden [mask-image:radial-gradient(50%_50%,white,transparent)] pointer-events-none"
       >
         <div className="absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#ffffff2c_1px,transparent_1px),linear-gradient(to_bottom,#3a3a3a01_1px,transparent_1px)] bg-[size:70px_80px]" />
         <SparklesComp
@@ -160,7 +160,7 @@ export default function PricingSection6() {
         animationNum={5}
         timelineRef={pricingRef}
         customVariants={revealVariants}
-        className="absolute left-0 top-[-114px] w-full h-[113.625vh] flex flex-col items-start justify-start content-start flex-none flex-nowrap gap-2.5 overflow-hidden p-0 z-0"
+        className="absolute inset-0 flex flex-col overflow-hidden p-0 z-0 pointer-events-none"
       >
         <div className="framer-1i5axl2">
           <div
@@ -182,7 +182,7 @@ export default function PricingSection6() {
         </div>
       </TimelineContent>
 
-      <article className="text-center mb-6 pt-32 max-w-3xl mx-auto space-y-2 relative z-50">
+      <article className="text-center mb-6 max-w-3xl mx-auto space-y-2 relative z-50 px-4">
         <h2 className="text-4xl font-medium text-white">
           <VerticalCutReveal
             splitBy="words"

@@ -67,7 +67,7 @@ export async function signUp(params: SignUpParams) {
 }
 
 export async function signIn(params: SignInParams) {
-  const { email, idToken } = params;
+  const { email, idToken, role } = params;
 
   try {
     const userRecord = await auth.getUserByEmail(email);
@@ -94,7 +94,7 @@ export async function signIn(params: SignInParams) {
         name: userRecord.displayName || "",
         email: userRecord.email || email,
         profileURL: userRecord.photoURL || "",
-        role: "candidate",
+        role: role === "recruiter" ? "recruiter" : "candidate",
       });
     } else if (signInProvider === "google.com") {
       // Keep the profile photo in sync with Google on Google sign-in
@@ -160,6 +160,29 @@ export async function getCurrentUser(): Promise<User | null> {
 export async function isAuthenticated() {
   const user = await getCurrentUser();
   return !!user;
+}
+
+/**
+ * Allow the currently-signed-in user to flip their own role. Useful for
+ * accounts that were created before the Candidate/Recruiter toggle was
+ * working correctly. Self-service — no admin required.
+ */
+export async function setMyRole(role: "recruiter" | "candidate") {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("session")?.value;
+  if (!sessionCookie)
+    return { success: false, message: "Not authenticated" } as const;
+  try {
+    const decoded = await auth.verifySessionCookie(sessionCookie, true);
+    await db
+      .collection("users")
+      .doc(decoded.uid)
+      .set({ role }, { merge: true });
+    return { success: true, role } as const;
+  } catch (err) {
+    console.error("setMyRole error", err);
+    return { success: false, message: "Failed to update role" } as const;
+  }
 }
 
 // Update current user's profile (name, profileURL)

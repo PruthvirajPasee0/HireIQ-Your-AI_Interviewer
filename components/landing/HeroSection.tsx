@@ -107,7 +107,7 @@ export default function HeroSection() {
                     size="lg"
                     className="rounded-xl bg-white px-5 text-base text-black font-semibold hover:bg-white/90"
                   >
-                    <Link href="/sign-up" data-magnetic>
+                    <Link href="/sign-up">
                       <span className="text-nowrap">Start Free Practice</span>
                     </Link>
                   </Button>
@@ -118,7 +118,7 @@ export default function HeroSection() {
                   variant="ghost"
                   className="h-10.5 rounded-xl px-5 text-white/70 hover:text-white hover:bg-white/10"
                 >
-                  <Link href="#how-it-works" data-magnetic>
+                  <Link href="#how-it-works">
                     <span className="text-nowrap">See How It Works</span>
                   </Link>
                 </Button>

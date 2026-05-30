@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Volume2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createAgent, updateAgent, deleteAgent } from "@/lib/actions/agents.action";
+import { AGENT_TEMPLATES, type AgentTemplate } from "@/lib/agent-templates";
 
 // Confirmed aura-2 voices (some aura-1 voices like perseus/stella don't have
 // an aura-2 version yet — they 404 on /v1/speak).
@@ -50,6 +52,56 @@ export default function AgentForm({ mode, recruiterId, agent }: Props) {
   const [questionsText, setQuestionsText] = useState(
     (agent?.questionBank ?? []).join("\n")
   );
+
+  // Voice preview
+  const [previewingVoice, setPreviewingVoice] = useState<DeepgramVoice | null>(
+    null,
+  );
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const previewVoice = async (voice: DeepgramVoice) => {
+    if (previewingVoice) return;
+    setPreviewingVoice(voice);
+    try {
+      const res = await fetch("/api/text-to-speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `Hi, I'm your AI interviewer. Let's get started — tell me about yourself.`,
+          voice,
+        }),
+      });
+      if (!res.ok) throw new Error(`TTS failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        setPreviewingVoice(null);
+        URL.revokeObjectURL(url);
+      };
+      audio.onerror = () => {
+        setPreviewingVoice(null);
+        URL.revokeObjectURL(url);
+        toast.error("Could not play preview");
+      };
+      await audio.play();
+    } catch (err) {
+      toast.error(String(err));
+      setPreviewingVoice(null);
+    }
+  };
+
+  const applyTemplate = (t: AgentTemplate) => {
+    setName(t.name);
+    setTargetRole(t.targetRole);
+    setLevel(t.level);
+    setPersona(t.persona);
+    setVoiceProfile(t.voiceProfile);
+    setTechstackText(t.techstack.join(", "));
+    setQuestionsText(t.questionBank.join("\n"));
+    toast.success(`Loaded "${t.name}" template — tweak and save`);
+  };
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,6 +185,33 @@ export default function AgentForm({ mode, recruiterId, agent }: Props) {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5 max-w-3xl">
+      {mode === "create" && (
+        <div className="glass-card p-4 rounded-xl border border-white/10 bg-white/[0.04]">
+          <p className="text-sm font-medium mb-1">Start from a template</p>
+          <p className="text-xs text-white/60 mb-3">
+            Clone a ready-made agent and tweak — saves you writing a question
+            bank from scratch.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {AGENT_TEMPLATES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => applyTemplate(t)}
+                className="text-left rounded-lg border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] hover:border-white/30 transition p-3 cursor-pointer"
+              >
+                <p className="text-sm font-medium text-white">{t.name}</p>
+                <p className="text-xs text-white/55 mt-0.5">{t.summary}</p>
+                <p className="text-[10px] text-white/40 mt-1">
+                  {t.questionBank.length} questions · {t.level} · voice{" "}
+                  {t.voiceProfile.replace("aura-2-", "").replace("-en", "")}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div>
         <label className={labelCls}>Agent name</label>
         <input
@@ -183,17 +262,39 @@ export default function AgentForm({ mode, recruiterId, agent }: Props) {
 
       <div>
         <label className={labelCls}>Voice profile</label>
-        <select
-          className={inputCls}
-          value={voiceProfile}
-          onChange={(e) => setVoiceProfile(e.target.value as DeepgramVoice)}
-        >
-          {VOICE_OPTIONS.map((v) => (
-            <option key={v.id} value={v.id} className="bg-zinc-900">
-              {v.label}
-            </option>
-          ))}
-        </select>
+        <div className="flex gap-2">
+          <select
+            className={`${inputCls} flex-1`}
+            value={voiceProfile}
+            onChange={(e) => setVoiceProfile(e.target.value as DeepgramVoice)}
+          >
+            {VOICE_OPTIONS.map((v) => (
+              <option key={v.id} value={v.id} className="bg-zinc-900">
+                {v.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => previewVoice(voiceProfile)}
+            disabled={previewingVoice !== null}
+            title="Preview voice"
+            className="shrink-0 h-12 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium flex items-center gap-2 disabled:opacity-50 transition"
+          >
+            {previewingVoice === voiceProfile ? (
+              <>
+                <Volume2 className="size-4 animate-pulse" /> Playing…
+              </>
+            ) : (
+              <>
+                <Play className="size-4" /> Preview
+              </>
+            )}
+          </button>
+        </div>
+        <p className="text-xs text-white/50 mt-1">
+          Click Preview to hear the chosen voice say a sample line.
+        </p>
       </div>
 
       <div>

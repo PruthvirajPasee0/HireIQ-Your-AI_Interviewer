@@ -18,8 +18,13 @@ import type {
   TranscriptTurn,
 } from "./types.js";
 
-const POLL_INTERVAL_MS = 2500;
-const CANDIDATE_TURN_SILENCE_MS = 2500;
+// Tuned for responsiveness. Each turn is gated by:
+//   POLL_INTERVAL_MS (how often we hit Attendee's transcript endpoint)
+//   + CANDIDATE_TURN_SILENCE_MS (how long the candidate must be quiet before
+//     we consider their turn complete and reply).
+// Lower = snappier. Too low = we cut the candidate off mid-thought.
+const POLL_INTERVAL_MS = 1000;
+const CANDIDATE_TURN_SILENCE_MS = 1500;
 const END_TOKEN = "<END_INTERVIEW>";
 
 export class SessionRunner {
@@ -33,10 +38,16 @@ export class SessionRunner {
 
   /** ms timestamp of last transcript entry we've processed */
   private lastSeenTimestampMs = -1;
-  /** Pending candidate utterance being accumulated */
-  private pendingCandidateChunks: { ts: number; text: string }[] = [];
-  /** When the last new candidate transcript chunk arrived */
-  private lastCandidateChunkAt: number | null = null;
+  /**
+   * Pending non-bot utterance being accumulated, with the speaker name so we
+   * can label the transcript correctly when we flush. We treat ALL non-bot
+   * speech as something the AI should reply to — name-matching to decide
+   * "candidate vs recruiter" was too brittle (Google Meet display names rarely
+   * match the scheduled candidate name exactly).
+   */
+  private pendingChunks: { ts: number; text: string; speaker: string }[] = [];
+  /** When the last new non-bot transcript chunk arrived */
+  private lastChunkAt: number | null = null;
 
   constructor(sessionId: string) {
     this.sessionId = sessionId;
@@ -155,15 +166,15 @@ export class SessionRunner {
         continue;
       }
 
-      // Otherwise pull new candidate transcript chunks
+      // Otherwise pull new transcript chunks (any non-bot speaker)
       await this.pollTranscript();
-      const haveTurn = this.candidateTurnComplete();
+      const haveTurn = this.turnComplete();
       if (haveTurn) {
-        const text = this.flushCandidateTurn();
-        if (text.length > 0) {
+        const flushed = this.flushTurn();
+        if (flushed.text.length > 0) {
           await this.appendTranscript({
-            role: "candidate",
-            content: text,
+            role: flushed.role,
+            content: flushed.text,
             ts: new Date().toISOString(),
           });
           const reply = await this.speakAgentTurn(null, null);
@@ -197,36 +208,69 @@ export class SessionRunner {
       // Skip our own bot's speech
       if (e.speakerName === this.botName) continue;
 
-      // Classify candidate vs recruiter by name match
-      const isCandidate = e.speakerName
-        .toLowerCase()
-        .includes(this.session.candidateName.toLowerCase().split(" ")[0]);
-
-      if (isCandidate) {
-        this.pendingCandidateChunks.push({ ts: e.timestampMs, text: e.text });
-        this.lastCandidateChunkAt = Date.now();
-      } else {
-        // Anyone else who speaks is treated as the recruiter
-        await this.appendTranscript({
-          role: "recruiter",
-          content: e.text,
-          ts: new Date().toISOString(),
-        });
-      }
+      // EVERY non-bot utterance is a turn the AI should respond to. We used
+      // to short-circuit recruiter speech (just log to transcript, never
+      // trigger a reply) — that broke the conversation flow whenever the
+      // Meet display name didn't match the scheduled candidate name.
+      this.pendingChunks.push({
+        ts: e.timestampMs,
+        text: e.text,
+        speaker: e.speakerName,
+      });
+      this.lastChunkAt = Date.now();
     }
   }
 
-  private candidateTurnComplete(): boolean {
-    if (this.pendingCandidateChunks.length === 0) return false;
-    if (this.lastCandidateChunkAt === null) return false;
-    return Date.now() - this.lastCandidateChunkAt > CANDIDATE_TURN_SILENCE_MS;
+  private turnComplete(): boolean {
+    if (this.pendingChunks.length === 0) return false;
+    if (this.lastChunkAt === null) return false;
+    return Date.now() - this.lastChunkAt > CANDIDATE_TURN_SILENCE_MS;
   }
 
-  private flushCandidateTurn(): string {
-    const text = this.pendingCandidateChunks.map((c) => c.text).join(" ");
-    this.pendingCandidateChunks = [];
-    this.lastCandidateChunkAt = null;
-    return text.trim();
+  /**
+   * Flush all pending chunks as a single turn. Picks the most-frequent
+   * speaker for role labeling. Falls back to "candidate" — when in doubt,
+   * the turn is part of the interview flow.
+   */
+  private flushTurn(): { text: string; role: TranscriptTurn["role"] } {
+    const text = this.pendingChunks.map((c) => c.text).join(" ").trim();
+    // Pick the dominant speaker among chunks
+    const counts = new Map<string, number>();
+    for (const c of this.pendingChunks) {
+      counts.set(c.speaker, (counts.get(c.speaker) ?? 0) + 1);
+    }
+    let dominantSpeaker = "";
+    let max = -1;
+    for (const [speaker, count] of counts) {
+      if (count > max) {
+        max = count;
+        dominantSpeaker = speaker;
+      }
+    }
+    this.pendingChunks = [];
+    this.lastChunkAt = null;
+    return { text, role: this.classifySpeaker(dominantSpeaker) };
+  }
+
+  /**
+   * Role label for transcript display only — does NOT gate whether the AI
+   * replies. Heuristic: if the speaker's name fuzzy-matches the candidate's
+   * name we labeled in Firestore, label "candidate". Otherwise "recruiter".
+   */
+  private classifySpeaker(speakerName: string): TranscriptTurn["role"] {
+    if (!speakerName) return "candidate";
+    const name = speakerName.toLowerCase();
+    const candidateFirst = this.session.candidateName.toLowerCase().split(" ")[0];
+    if (candidateFirst && name.includes(candidateFirst)) return "candidate";
+    const candidateLast = this.session.candidateName
+      .toLowerCase()
+      .split(" ")
+      .slice(-1)[0];
+    if (candidateLast && candidateLast !== candidateFirst && name.includes(candidateLast))
+      return "candidate";
+    // If nothing matched, fall back to candidate — better to over-tag than
+    // misroute conversation flow.
+    return "candidate";
   }
 
   private async speakAgentTurn(

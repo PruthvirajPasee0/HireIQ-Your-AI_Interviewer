@@ -43,8 +43,6 @@ export default function SessionScheduleForm({ recruiterId, agents }: Props) {
   const [resumeSummary, setResumeSummary] = useState<string | null>(null);
   const [questionsText, setQuestionsText] = useState("");
 
-  const [botProvider, setBotProvider] = useState<"" | "attendee" | "vexa">("");
-
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
   const handleGenerate = async () => {
@@ -123,7 +121,6 @@ export default function SessionScheduleForm({ recruiterId, agents }: Props) {
           questions: questions.length > 0 ? questions : undefined,
           resumeText: resumeSummary ?? undefined,
           resumeFileName: resumeFile?.name,
-          botProvider: botProvider || undefined,
         });
         if (!res.success) {
           toast.error(res.message);
@@ -132,7 +129,11 @@ export default function SessionScheduleForm({ recruiterId, agents }: Props) {
         }
         const url = `${window.location.origin}/join/${res.inviteToken}`;
         setInviteUrl(url);
-        toast.success("Interview scheduled");
+        toast.success(
+          res.emailSent
+            ? "Interview scheduled — invite emailed to candidate"
+            : "Interview scheduled",
+        );
         router.refresh();
       } catch (err) {
         toast.error(String(err));
@@ -212,29 +213,9 @@ export default function SessionScheduleForm({ recruiterId, agents }: Props) {
           value={scheduledAtLocal}
           onChange={(e) => setScheduledAtLocal(e.target.value)}
         />
-      </div>
-
-      <div>
-        <label className={labelCls}>Bot provider</label>
-        <select
-          className={inputCls}
-          value={botProvider}
-          onChange={(e) => setBotProvider(e.target.value as typeof botProvider)}
-        >
-          <option value="" className="bg-zinc-900">
-            Default (worker env)
-          </option>
-          <option value="attendee" className="bg-zinc-900">
-            Attendee.dev — managed cloud
-          </option>
-          <option value="vexa" className="bg-zinc-900">
-            Vexa.ai — Apache-2.0 self-host friendly
-          </option>
-        </select>
         <p className="text-xs text-white/50 mt-1">
-          Both can drive the Meet bot. Default uses the worker&apos;s
-          <code className="mx-1 px-1 bg-white/10 rounded">BOT_PROVIDER</code>
-          env var (currently Attendee).
+          The AI bot is dispatched automatically ~30s before this time. You
+          can also start it manually from the Live panel.
         </p>
       </div>
 

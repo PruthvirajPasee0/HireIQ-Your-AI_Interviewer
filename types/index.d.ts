@@ -191,6 +191,13 @@ interface GetLatestInterviewsParams {
 interface SignInParams {
   email: string;
   idToken: string;
+  /**
+   * Only used when the Firestore user doc DOES NOT EXIST yet (e.g. first
+   * Google sign-in). Lets the auth screen propagate the role chosen on the
+   * Candidate/Recruiter toggle. Ignored for existing users — their stored
+   * role is the source of truth.
+   */
+  role?: "recruiter" | "candidate";
 }
 
 interface SignUpParams {

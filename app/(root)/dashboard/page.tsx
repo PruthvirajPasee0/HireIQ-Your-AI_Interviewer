@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import InterviewCard from "@/components/InterviewCard";
+import RoleSwitchButton from "@/components/RoleSwitchButton";
 
 import { getCurrentUser } from "@/lib/actions/auth.action";
 import {
@@ -40,6 +41,7 @@ async function Home() {
               <h2 className="text-2xl font-bold">
                 Welcome back, {user?.name || "User"}!
               </h2>
+              <RoleSwitchButton to="recruiter" redirectTo="/recruiter" />
             </div>
           </div>
 

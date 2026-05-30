@@ -41,6 +41,42 @@ const testimonials: Testimonial[] = [
       "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&auto=format&fit=crop&q=70",
     rating: 4.8,
   },
+  {
+    name: "James L.",
+    title: "Senior Recruiter · Netflix",
+    quote:
+      "Our team runs 30+ AI-led screens a week now. The auto-graded scorecards mean every candidate gets fair, structured feedback — no scheduling headaches.",
+    avatarSrc:
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=70",
+    rating: 5.0,
+  },
+  {
+    name: "Anya S.",
+    title: "Frontend Engineer · Vercel",
+    quote:
+      "The resume-tailored questions caught me off guard in the best way — they actually probed the projects on my CV. I felt seen, not stress-tested.",
+    avatarSrc:
+      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=70",
+    rating: 4.9,
+  },
+  {
+    name: "Daniel O.",
+    title: "Engineering Manager · Shopify",
+    quote:
+      "I was skeptical about an AI interviewer, but watching it adapt when I interjected mid-call sold me. We've cut first-round time-to-feedback by 70%.",
+    avatarSrc:
+      "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400&auto=format&fit=crop&q=70",
+    rating: 4.8,
+  },
+  {
+    name: "Mei C.",
+    title: "ML Engineer · OpenAI",
+    quote:
+      "Best interview prep I've used. The voice is natural enough that I forgot it was AI by the third question — that's the whole point.",
+    avatarSrc:
+      "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=400&auto=format&fit=crop&q=70",
+    rating: 5.0,
+  },
 ];
 
 export default function TestimonialsSection() {

@@ -5,6 +5,7 @@ import { db } from "@/firebase/admin";
 import { getCurrentUser } from "@/lib/actions/auth.action";
 import { getAgentById } from "@/lib/actions/agents.action";
 import { signInviteToken } from "@/lib/invite-token";
+import { sendCandidateInvite, emailConfigured } from "@/lib/email/brevo";
 
 const SESSIONS = "interviewSessions";
 
@@ -16,7 +17,12 @@ function assertRecruiter(user: User | null): asserts user is User {
 export async function createInterviewSession(
   params: CreateInterviewSessionParams
 ): Promise<
-  | { success: true; sessionId: string; inviteToken: string }
+  | {
+      success: true;
+      sessionId: string;
+      inviteToken: string;
+      emailSent: boolean;
+    }
   | { success: false; message: string }
 > {
   const user = await getCurrentUser();
@@ -62,7 +68,31 @@ export async function createInterviewSession(
     exp: Math.floor(Date.parse(session.scheduledAt) / 1000) + 60 * 60 * 24, // valid 24h after scheduled
   });
 
-  return { success: true, sessionId: ref.id, inviteToken };
+  // Best-effort send the invite email if Resend is configured. Doesn't
+  // block session creation if the send fails — recruiter can still copy
+  // the link manually from the form.
+  let emailSent = false;
+  if (emailConfigured()) {
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ??
+      process.env.NEXT_PUBLIC_BASE_URL ??
+      "http://localhost:3000";
+    const inviteUrl = `${appUrl.replace(/\/$/, "")}/join/${inviteToken}`;
+    const result = await sendCandidateInvite({
+      to: session.candidateEmail,
+      candidateName: session.candidateName,
+      agentName: agent.name,
+      scheduledAt: session.scheduledAt,
+      meetLink: session.meetLink,
+      inviteUrl,
+    });
+    emailSent = result.sent;
+    if (!result.sent) {
+      console.warn("Invite email send failed:", result.reason);
+    }
+  }
+
+  return { success: true, sessionId: ref.id, inviteToken, emailSent } as const;
 }
 
 export async function getSessionsByRecruiter(): Promise<InterviewSession[]> {
