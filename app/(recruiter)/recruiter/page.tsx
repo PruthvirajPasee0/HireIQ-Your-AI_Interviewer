@@ -4,6 +4,7 @@ import { requireRecruiter } from "@/lib/auth/role";
 import { getAgentsByRecruiter } from "@/lib/actions/agents.action";
 import { getSessionsByRecruiter } from "@/lib/actions/sessions.action";
 import DeleteSessionButton from "@/components/DeleteSessionButton";
+import LocalTime from "@/components/LocalTime";
 
 export default async function RecruiterDashboard() {
   const user = await requireRecruiter();
@@ -101,7 +102,7 @@ export default async function RecruiterDashboard() {
                       </span>
                     </div>
                     <p className="text-xs text-white/50 mt-2">
-                      {new Date(s.scheduledAt).toLocaleString()}
+                      <LocalTime iso={s.scheduledAt} />
                     </p>
                   </Link>
                   {isFinished && (

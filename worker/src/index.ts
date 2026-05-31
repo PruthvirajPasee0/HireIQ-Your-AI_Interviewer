@@ -15,9 +15,80 @@ const active = new Map<string, SessionRunner>();
  * the instance unhealthy and restarts it in a loop. So we expose a tiny
  * server that reports liveness + how many interviews are currently running.
  * --------------------------------------------------------------------- */
+/**
+ * Handle an Attendee `transcript.update` webhook payload. Attendee pushes one
+ * of these the moment Deepgram finalizes an utterance — far faster than our
+ * 1s poll. We route it straight into the live SessionRunner. Polling stays on
+ * as a fallback (shared timestamp dedup means no double-processing).
+ *
+ * Expected shape (per Attendee webhook docs):
+ *   { trigger: "transcript.update", bot_id: "bot_...",
+ *     data: { speaker_name, timestamp_ms, transcription: { transcript } } }
+ */
+function handleAttendeeWebhook(body: unknown): { ok: boolean; routed?: boolean } {
+  const b = body as {
+    trigger?: string;
+    bot_id?: string;
+    data?: {
+      speaker_name?: string;
+      timestamp_ms?: number;
+      transcription?: { transcript?: string } | string;
+    };
+  };
+  if (!b || b.trigger !== "transcript.update") return { ok: true };
+  const botId = b.bot_id;
+  const d = b.data;
+  if (!botId || !d) return { ok: true };
+
+  const text =
+    typeof d.transcription === "string"
+      ? d.transcription
+      : (d.transcription?.transcript ?? "");
+  const ts = typeof d.timestamp_ms === "number" ? d.timestamp_ms : Date.now();
+  if (!text) return { ok: true };
+
+  const routed = SessionRunner.routeUtterance(
+    botId,
+    d.speaker_name ?? "unknown",
+    text,
+    ts,
+  );
+  if (routed) {
+    logger.info(
+      { botId, len: text.length },
+      "realtime transcript routed to session",
+    );
+  }
+  return { ok: true, routed };
+}
+
 function startHealthServer() {
   const port = Number(process.env.PORT ?? 8000);
   const server = createServer((req, res) => {
+    // Realtime transcript webhook from Attendee (POST).
+    if (
+      req.method === "POST" &&
+      req.url &&
+      req.url.startsWith("/webhooks/attendee")
+    ) {
+      let raw = "";
+      req.on("data", (c) => {
+        raw += c;
+        if (raw.length > 1_000_000) req.destroy(); // 1MB guard
+      });
+      req.on("end", () => {
+        try {
+          const parsed = raw ? JSON.parse(raw) : {};
+          handleAttendeeWebhook(parsed);
+        } catch (err) {
+          logger.warn({ err }, "bad webhook payload");
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      });
+      return;
+    }
+
     if (req.url === "/health" || req.url === "/" || req.url === "/healthz") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(

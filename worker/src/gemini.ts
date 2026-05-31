@@ -1,9 +1,31 @@
 import { google } from "@ai-sdk/google";
-import { generateText, generateObject } from "ai";
+import { mistral } from "@ai-sdk/mistral";
+import { generateText, generateObject, type LanguageModel } from "ai";
 import { z } from "zod";
 import type { LlmMessage } from "./prompts.js";
 
-const MODEL_ID = process.env.GEMINI_TEXT_MODEL ?? "gemini-2.5-flash-lite";
+/**
+ * LLM provider selection. Defaults to Mistral (much higher free-tier rate
+ * limits: ~50 req/min vs Gemini free's ~15 req/min, no tight daily cap), with
+ * Gemini available as a fallback by setting LLM_PROVIDER=google.
+ *
+ *   LLM_PROVIDER       = mistral | google   (default: mistral)
+ *   MISTRAL_MODEL      = mistral-small-latest (default)
+ *   GEMINI_TEXT_MODEL  = gemini-2.5-flash-lite (default, used when provider=google)
+ */
+const PROVIDER = (process.env.LLM_PROVIDER ?? "mistral").toLowerCase();
+const MISTRAL_MODEL = process.env.MISTRAL_MODEL ?? "mistral-small-latest";
+const GEMINI_MODEL = process.env.GEMINI_TEXT_MODEL ?? "gemini-2.5-flash-lite";
+
+function textModel(): LanguageModel {
+  return PROVIDER === "google" ? google(GEMINI_MODEL) : mistral(MISTRAL_MODEL);
+}
+
+function structuredModel(): LanguageModel {
+  return PROVIDER === "google"
+    ? google(GEMINI_MODEL, { structuredOutputs: true })
+    : mistral(MISTRAL_MODEL);
+}
 
 export async function generateAgentReply(messages: LlmMessage[]): Promise<string> {
   const system = messages.find((m) => m.role === "system")?.content ?? "";
@@ -15,7 +37,7 @@ export async function generateAgentReply(messages: LlmMessage[]): Promise<string
     }));
 
   const { text } = await generateText({
-    model: google(MODEL_ID),
+    model: textModel(),
     system,
     messages: turns,
     temperature: 0.6,
@@ -48,7 +70,7 @@ export type Feedback = z.infer<typeof feedbackSchema>;
 
 export async function generateFeedback(transcriptText: string): Promise<Feedback> {
   const { object } = await generateObject({
-    model: google(MODEL_ID, { structuredOutputs: true }),
+    model: structuredModel(),
     schema: feedbackSchema,
     prompt: `You are an AI interviewer analyzing a live mock interview transcript. Be thorough. Don't be lenient.
 Score the candidate from 0-100 in each category:

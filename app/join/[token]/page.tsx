@@ -5,6 +5,7 @@ import { verifyInviteToken } from "@/lib/invite-token";
 import { getSessionById } from "@/lib/actions/sessions.action";
 import { getAgentById } from "@/lib/actions/agents.action";
 import { db } from "@/firebase/admin";
+import LocalTime from "@/components/LocalTime";
 
 async function getAgentMinimal(agentId: string) {
   const doc = await db.collection("agents").doc(agentId).get();
@@ -57,7 +58,9 @@ export default async function CandidateJoinPage({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
           <div className="glass-card p-4 rounded-xl border border-white/10 bg-white/[0.04]">
             <p className="text-xs text-white/50">Scheduled</p>
-            <p className="font-medium mt-1">{scheduled.toLocaleString()}</p>
+            <p className="font-medium mt-1">
+              <LocalTime iso={session.scheduledAt} />
+            </p>
           </div>
           <div className="glass-card p-4 rounded-xl border border-white/10 bg-white/[0.04]">
             <p className="text-xs text-white/50">Interviewer</p>

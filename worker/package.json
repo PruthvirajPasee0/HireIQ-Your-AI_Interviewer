@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^1.1.25",
+    "@ai-sdk/mistral": "^1.2.8",
     "ai": "^4.1.61",
     "dotenv": "^16.4.5",
     "firebase-admin": "^13.2.0",

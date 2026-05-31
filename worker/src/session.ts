@@ -28,6 +28,29 @@ const CANDIDATE_TURN_SILENCE_MS = 1500;
 const END_TOKEN = "<END_INTERVIEW>";
 
 export class SessionRunner {
+  /**
+   * Registry of live runners keyed by Attendee bot id. Lets the realtime
+   * transcript webhook (worker HTTP server) route an incoming utterance to
+   * the right in-progress session without polling.
+   */
+  private static readonly byBotId = new Map<string, SessionRunner>();
+
+  /**
+   * Called by the webhook receiver in index.ts on each Attendee
+   * `transcript.update` event. Returns true if a live session consumed it.
+   */
+  static routeUtterance(
+    botId: string,
+    speakerName: string,
+    text: string,
+    timestampMs: number,
+  ): boolean {
+    const runner = SessionRunner.byBotId.get(botId);
+    if (!runner) return false;
+    runner.ingestUtterance(speakerName, text, timestampMs);
+    return true;
+  }
+
   private readonly sessionId: string;
   private session!: InterviewSession;
   private agent!: Agent;
@@ -53,6 +76,22 @@ export class SessionRunner {
     this.sessionId = sessionId;
   }
 
+  /**
+   * Buffer one finalized utterance (from the realtime webhook OR the polling
+   * fallback). Both paths dedup on lastSeenTimestampMs so an utterance is
+   * never processed twice regardless of which arrives first. Synchronous +
+   * cheap so it's safe to call from the HTTP handler.
+   */
+  ingestUtterance(speakerName: string, text: string, timestampMs: number): void {
+    const clean = (text ?? "").trim();
+    if (!clean) return;
+    if (timestampMs <= this.lastSeenTimestampMs) return; // already seen
+    this.lastSeenTimestampMs = Math.max(this.lastSeenTimestampMs, timestampMs);
+    if (speakerName === this.botName) return; // skip our own TTS
+    this.pendingChunks.push({ ts: timestampMs, text: clean, speaker: speakerName });
+    this.lastChunkAt = Date.now();
+  }
+
   async run(): Promise<void> {
     try {
       await this.load();
@@ -64,6 +103,9 @@ export class SessionRunner {
     } catch (err) {
       logger.error({ err, sessionId: this.sessionId }, "session run failed");
       await this.markStatus("failed", String(err));
+      if (this.handle?.attendeeBotId) {
+        SessionRunner.byBotId.delete(this.handle.attendeeBotId);
+      }
       if (this.handle) {
         try {
           await this.provider.leaveBot(this.handle);
@@ -115,6 +157,11 @@ export class SessionRunner {
     if (handle.vexaNativeMeetingId) update.vexaNativeMeetingId = handle.vexaNativeMeetingId;
     if (handle.vexaNumericId !== undefined) update.vexaNumericId = handle.vexaNumericId;
     await db.collection("interviewSessions").doc(this.sessionId).update(update);
+
+    // Register so the realtime transcript webhook can route to this runner.
+    if (handle.attendeeBotId) {
+      SessionRunner.byBotId.set(handle.attendeeBotId, this);
+    }
   }
 
   private async waitForBotJoined() {
@@ -202,22 +249,11 @@ export class SessionRunner {
       .filter((e) => e.timestampMs > this.lastSeenTimestampMs)
       .sort((a, b) => a.timestampMs - b.timestampMs);
 
+    // Funnel through the same ingest path as the realtime webhook — shared
+    // dedup on lastSeenTimestampMs means an utterance delivered by BOTH the
+    // webhook and this poll is only ever buffered once.
     for (const e of newOnes) {
-      this.lastSeenTimestampMs = Math.max(this.lastSeenTimestampMs, e.timestampMs);
-      if (!e.text) continue;
-      // Skip our own bot's speech
-      if (e.speakerName === this.botName) continue;
-
-      // EVERY non-bot utterance is a turn the AI should respond to. We used
-      // to short-circuit recruiter speech (just log to transcript, never
-      // trigger a reply) — that broke the conversation flow whenever the
-      // Meet display name didn't match the scheduled candidate name.
-      this.pendingChunks.push({
-        ts: e.timestampMs,
-        text: e.text,
-        speaker: e.speakerName,
-      });
-      this.lastChunkAt = Date.now();
+      this.ingestUtterance(e.speakerName, e.text, e.timestampMs);
     }
   }
 
@@ -353,6 +389,9 @@ export class SessionRunner {
 
   private async finishUp() {
     this.stop = true;
+    if (this.handle?.attendeeBotId) {
+      SessionRunner.byBotId.delete(this.handle.attendeeBotId);
+    }
     if (this.handle) {
       try {
         await this.provider.leaveBot(this.handle);
