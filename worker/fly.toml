@@ -1,0 +1,36 @@
+# Fly.io app config for the Hireiq.ai worker.
+# A background worker — no HTTP endpoints, just one always-on VM.
+#
+# Bring this up with:
+#   fly launch --copy-config --no-deploy   (first time, picks a unique app name)
+#   fly secrets set <KEY>=<VAL> ...        (paste all env vars)
+#   fly deploy
+#
+# After it's deployed:
+#   fly logs        # stream worker logs (replaces local terminal output)
+#   fly status      # see if the VM is healthy
+#   fly machine restart <id>   # bounce the worker
+
+app = "hireiq-worker"
+primary_region = "iad"   # us-east — change if you prefer (sjc, lhr, syd, etc.)
+
+[build]
+
+# One VM. Worker is single-tenant — don't scale out, you'll get duplicate
+# session pickups. If you need more capacity, increase memory/CPU instead.
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"
+
+# Fly's default behaviour for non-HTTP services is "scale to zero when idle".
+# We DON'T want that — the worker must keep its Firestore listener alive.
+[deploy]
+  strategy = "immediate"
+
+[processes]
+  app = "node dist/index.js"
+
+[env]
+  NODE_ENV = "production"
+  LOG_LEVEL = "info"

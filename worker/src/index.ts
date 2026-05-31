@@ -1,9 +1,41 @@
 import "dotenv/config";
+import { createServer } from "node:http";
 import { db } from "./firestore.js";
 import { logger } from "./logger.js";
 import { SessionRunner } from "./session.js";
 
 const active = new Map<string, SessionRunner>();
+
+/* -------------------------------------------------------------------------
+ * Health-check HTTP server.
+ *
+ * The worker is a background process, but most always-on hosts (Koyeb,
+ * Render, Cloud Run, etc.) deploy it as a "web service" and run an HTTP
+ * health check against the assigned PORT. Without a listener the host marks
+ * the instance unhealthy and restarts it in a loop. So we expose a tiny
+ * server that reports liveness + how many interviews are currently running.
+ * --------------------------------------------------------------------- */
+function startHealthServer() {
+  const port = Number(process.env.PORT ?? 8000);
+  const server = createServer((req, res) => {
+    if (req.url === "/health" || req.url === "/" || req.url === "/healthz") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          status: "ok",
+          activeSessions: active.size,
+          uptimeSeconds: Math.round(process.uptime()),
+        }),
+      );
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  server.listen(port, "0.0.0.0", () => {
+    logger.info({ port }, "health server listening");
+  });
+}
 
 /* -------------------------------------------------------------------------
  * Auto-dispatch scheduler
@@ -115,6 +147,7 @@ function main() {
     }
   }
   logger.info("worker started — watching interviewSessions");
+  startHealthServer();
   watchSessions();
   startAutoDispatcher();
   logger.info(

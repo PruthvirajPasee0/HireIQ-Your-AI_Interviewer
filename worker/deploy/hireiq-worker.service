@@ -1,0 +1,22 @@
+[Unit]
+Description=Hireiq.ai AI Interview Worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Where the built worker lives (set by setup-gce.sh)
+WorkingDirectory=/opt/hireiq/worker
+# dotenv (import "dotenv/config") loads /opt/hireiq/worker/.env at startup
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+# Restart if it ever wedges (belt-and-suspenders; the health server also helps)
+TimeoutStartSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hireiq-worker
+
+[Install]
+WantedBy=multi-user.target
