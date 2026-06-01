@@ -480,14 +480,14 @@ export class SessionRunner {
       await this.speakAgentTurn(
         null,
         null,
-        "[NO RESPONSE] The candidate has said nothing at all since you spoke. Give ONE short, warm line that it's completely fine to take their time and you're ready whenever they are. Do NOT re-ask or rephrase the question. One short sentence.",
+        '[NO RESPONSE] The candidate has been silent since you spoke. Gently re-ask your current question in a slightly simpler way to help them engage. Do NOT use the phrase "take your time" or any variant of it. One short sentence.',
       );
     } else if (this.noResponsePrompts === 1 && silent > NO_RESPONSE_SECOND_MS) {
       this.noResponsePrompts = 2;
       await this.speakAgentTurn(
         null,
         null,
-        "[NO RESPONSE] Still total silence. Briefly check whether they can hear you and would like to continue or move to the next question. One short sentence.",
+        '[NO RESPONSE] Still silent. Briefly ask whether they can hear you and would like to continue or move on to the next question. Do NOT use the phrase "take your time". One short sentence.',
       );
     } else if (this.noResponsePrompts >= 2 && silent > NO_RESPONSE_SECOND_MS) {
       // Stop nudging — wait quietly. Resumes if they speak (resets counter).

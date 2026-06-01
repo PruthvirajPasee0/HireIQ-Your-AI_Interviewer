@@ -1,10 +1,96 @@
 import "dotenv/config";
 import { createServer } from "node:http";
+import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 import { db } from "./firestore.js";
 import { logger } from "./logger.js";
 import { SessionRunner } from "./session.js";
 
+// Unique id for THIS worker process. Used to claim a session for dispatch so
+// that if two instances are briefly live at once (e.g. during a Render
+// zero-downtime deploy), only ONE of them launches a bot — preventing the
+// "two bots joined" / runners-racing-and-ending-early bug.
+const WORKER_ID = `${process.pid}-${randomUUID().slice(0, 8)}`;
+// A claim older than this is considered stale (worker died before dispatching)
+// and may be re-taken, so a session never gets permanently stuck.
+const DISPATCH_CLAIM_TTL_MS = 3 * 60 * 1000;
+
+const WEBHOOK_SECRET = process.env.ATTENDEE_WEBHOOK_SECRET;
+// Set to "true" to REJECT webhooks whose signature doesn't verify. Default is
+// fail-open (process anyway, log a warning) — canonical-JSON signing can vary
+// subtly across languages, and the bot_id->live-session guard already blocks
+// random callers. Flip to strict once you've confirmed verifications pass.
+const WEBHOOK_STRICT = process.env.WEBHOOK_REJECT_INVALID === "true";
+
+function sortKeys(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(sortKeys);
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return Object.keys(o)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, k) => {
+        acc[k] = sortKeys(o[k]);
+        return acc;
+      }, {});
+  }
+  return v;
+}
+
+/** Verify Attendee's X-Webhook-Signature (HMAC-SHA256, canonical JSON, b64). */
+function verifyWebhook(parsed: unknown, signature: string | undefined): boolean {
+  if (!WEBHOOK_SECRET) return true; // not configured -> skip
+  if (!signature) return false;
+  try {
+    const canonical = JSON.stringify(sortKeys(parsed));
+    const expected = createHmac("sha256", Buffer.from(WEBHOOK_SECRET, "base64"))
+      .update(canonical, "utf8")
+      .digest("base64");
+    const a = Buffer.from(expected);
+    const b = Buffer.from(signature);
+    return a.length === b.length && timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
 const active = new Map<string, SessionRunner>();
+// Sessions this instance is mid-claim on (synchronous guard against the
+// onSnapshot firing twice before the async claim transaction resolves).
+const claiming = new Set<string>();
+
+/**
+ * Atomically claim a session for dispatch via a Firestore transaction. Returns
+ * true only if THIS worker won the claim (and should launch the bot). Prevents
+ * two concurrent worker instances from both dispatching the same session.
+ */
+async function claimDispatch(id: string): Promise<boolean> {
+  const ref = db.collection("interviewSessions").doc(id);
+  try {
+    return await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return false;
+      const data = snap.data() as {
+        status?: string;
+        dispatchClaimedBy?: string;
+        dispatchClaimedAt?: number;
+      };
+      if (data.status !== "bot_dispatching") return false;
+      const claimedAt = data.dispatchClaimedAt ?? 0;
+      const fresh = Date.now() - claimedAt < DISPATCH_CLAIM_TTL_MS;
+      // Someone else holds a fresh claim — leave it to them.
+      if (data.dispatchClaimedBy && data.dispatchClaimedBy !== WORKER_ID && fresh) {
+        return false;
+      }
+      tx.update(ref, {
+        dispatchClaimedBy: WORKER_ID,
+        dispatchClaimedAt: Date.now(),
+      });
+      return true;
+    });
+  } catch (err) {
+    logger.warn({ err, id }, "dispatch claim transaction failed");
+    return false;
+  }
+}
 
 /* -------------------------------------------------------------------------
  * Health-check HTTP server.
@@ -79,6 +165,19 @@ function startHealthServer() {
       req.on("end", () => {
         try {
           const parsed = raw ? JSON.parse(raw) : {};
+          const sig = req.headers["x-webhook-signature"] as string | undefined;
+          const valid = verifyWebhook(parsed, sig);
+          if (!valid) {
+            if (WEBHOOK_STRICT) {
+              logger.warn("webhook signature invalid — rejecting (strict mode)");
+              res.writeHead(401, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ ok: false, error: "bad signature" }));
+              return;
+            }
+            logger.warn(
+              "webhook signature mismatch — processing anyway (fail-open)",
+            );
+          }
           handleAttendeeWebhook(parsed);
         } catch (err) {
           logger.warn({ err }, "bad webhook payload");
@@ -182,16 +281,30 @@ function watchSessions() {
         snap.docChanges().forEach((change) => {
           if (change.type === "added" || change.type === "modified") {
             const id = change.doc.id;
-            if (active.has(id)) return;
-            const runner = new SessionRunner(id);
-            active.set(id, runner);
-            logger.info({ id }, "picking up session");
-            runner
-              .run()
-              .catch((err) => logger.error({ err, id }, "runner failed"))
-              .finally(() => {
-                active.delete(id);
-                logger.info({ id }, "runner finished");
+            if (active.has(id) || claiming.has(id)) return;
+            claiming.add(id);
+            claimDispatch(id)
+              .then((won) => {
+                if (!won) {
+                  claiming.delete(id);
+                  logger.info({ id }, "dispatch claimed by another worker — skipping");
+                  return;
+                }
+                const runner = new SessionRunner(id);
+                active.set(id, runner);
+                claiming.delete(id);
+                logger.info({ id, worker: WORKER_ID }, "picking up session (claimed)");
+                runner
+                  .run()
+                  .catch((err) => logger.error({ err, id }, "runner failed"))
+                  .finally(() => {
+                    active.delete(id);
+                    logger.info({ id }, "runner finished");
+                  });
+              })
+              .catch((err) => {
+                claiming.delete(id);
+                logger.warn({ err, id }, "claim handling failed");
               });
           }
         });
