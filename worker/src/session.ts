@@ -27,11 +27,17 @@ import type {
 // so we wait, and we wait EVEN LONGER when their last words signal they're not
 // actually done (a filler or a dangling conjunction/preposition).
 const POLL_INTERVAL_MS = 1000;
-// Baseline: candidate finished on a normal word, just paused.
-const CANDIDATE_TURN_SILENCE_MS = 3000;
+// Baseline: candidate finished on a normal word, just paused. Generous — a
+// nervous candidate often pauses to gather their next sentence; we'd rather
+// wait a beat too long than cut them off mid-thought.
+const CANDIDATE_TURN_SILENCE_MS = 4500;
 // They trailed off mid-thought ("...built it using", "um", "and") — give them
 // real room to continue before we step in.
-const MID_THOUGHT_SILENCE_MS = 5500;
+const MID_THOUGHT_SILENCE_MS = 7000;
+// A natural "thinking" beat before the agent starts speaking, so it doesn't
+// pounce the instant the candidate stops. Feels human; the small added latency
+// is an intentional trade for a calmer, less rushed conversation.
+const PRE_SPEAK_PAUSE_MS = 800;
 // Safety cap: if all we have is filler and they've gone quiet this long,
 // they're stuck — flush so the agent can gently encourage them rather than
 // sit in dead air forever.
@@ -427,6 +433,8 @@ export class SessionRunner {
 
     if (cleanReply.length > 0) {
       logger.info({ reply: cleanReply.slice(0, 120) }, "agent turn");
+      // Natural beat before speaking — don't pounce the instant they stop.
+      await sleep(PRE_SPEAK_PAUSE_MS);
       const audio = await synth(cleanReply, this.agent.voiceProfile);
       if (this.handle) {
         await this.provider.outputAudio(this.handle, audio);
