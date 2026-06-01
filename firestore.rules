@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ---------------------------------------------------------------------
+    // DEFAULT-DENY.
+    //
+    // Every piece of data in this app is read/written EXCLUSIVELY through the
+    // Firebase Admin SDK — Next.js server actions, the app/api routes, and the
+    // always-on worker. The Admin SDK runs with full privileges and BYPASSES
+    // these rules entirely, so locking the client out does not affect the app.
+    //
+    // The browser (client) Firebase SDK is used ONLY for Authentication
+    // (firebase/client.ts exports `auth`; `db` is never used on the client).
+    // Therefore no legitimate browser request needs direct Firestore access,
+    // and we deny all of it. This stops anyone holding the public web config
+    // (which is, by design, public) from reading candidate PII, agents,
+    // sessions, transcripts, or feedback directly.
+    //
+    // If you later add a client-side read (e.g. a live onSnapshot on a single
+    // interview session doc), add a NARROW allow rule for that exact path with
+    // request.auth and ownership checks — do not loosen this catch-all.
+    // ---------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
