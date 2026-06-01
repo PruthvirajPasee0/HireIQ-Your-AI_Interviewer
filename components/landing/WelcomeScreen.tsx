@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import * as THREE from "three";
 import { gsap } from "gsap";
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+// Type-only imports — erased at build time so three.js + its (heavy)
+// postprocessing modules are NOT in this component's static chunk. They're
+// loaded dynamically inside the effect (client-only) and split into their own
+// async chunk, keeping them out of the initial landing bundle.
+import type * as THREE from "three";
+import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 
 const TOTAL_SECTIONS = 2;
 
@@ -112,10 +114,25 @@ export default function WelcomeScreen({ children }: Props) {
 
   // ─── Three.js Init ───
   useEffect(() => {
-    if (!canvasRef.current || fullyHidden) return;
-    const refs = threeRefs.current;
+    if (fullyHidden) return;
+    let cancelled = false;
+    let onResize: (() => void) | null = null;
 
-    refs.scene = new THREE.Scene();
+    void (async () => {
+      const THREE = await import("three");
+      const { EffectComposer } = await import(
+        "three/examples/jsm/postprocessing/EffectComposer.js"
+      );
+      const { RenderPass } = await import(
+        "three/examples/jsm/postprocessing/RenderPass.js"
+      );
+      const { UnrealBloomPass } = await import(
+        "three/examples/jsm/postprocessing/UnrealBloomPass.js"
+      );
+      if (cancelled || !canvasRef.current) return;
+      const refs = threeRefs.current;
+
+      refs.scene = new THREE.Scene();
     refs.scene.fog = new THREE.FogExp2(0x000000, 0.00025);
 
     refs.camera = new THREE.PerspectiveCamera(
@@ -350,17 +367,20 @@ export default function WelcomeScreen({ children }: Props) {
     animate();
     setIsReady(true);
 
-    const onResize = () => {
-      if (!refs.camera || !refs.renderer || !refs.composer) return;
-      refs.camera.aspect = window.innerWidth / window.innerHeight;
-      refs.camera.updateProjectionMatrix();
-      refs.renderer.setSize(window.innerWidth, window.innerHeight);
-      refs.composer.setSize(window.innerWidth, window.innerHeight);
-    };
-    window.addEventListener("resize", onResize);
+      onResize = () => {
+        if (!refs.camera || !refs.renderer || !refs.composer) return;
+        refs.camera.aspect = window.innerWidth / window.innerHeight;
+        refs.camera.updateProjectionMatrix();
+        refs.renderer.setSize(window.innerWidth, window.innerHeight);
+        refs.composer.setSize(window.innerWidth, window.innerHeight);
+      };
+      window.addEventListener("resize", onResize);
+    })();
 
     return () => {
-      window.removeEventListener("resize", onResize);
+      cancelled = true;
+      if (onResize) window.removeEventListener("resize", onResize);
+      const refs = threeRefs.current;
       if (refs.animationId) cancelAnimationFrame(refs.animationId);
       refs.stars.forEach((s) => {
         s.geometry.dispose();

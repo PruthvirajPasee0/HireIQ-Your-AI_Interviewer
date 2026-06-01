@@ -1,131 +1,133 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import * as THREE from "three"
+// Type-only import — erased at build time, so `three` is NOT pulled into this
+// component's static chunk. The actual library is loaded dynamically inside the
+// effect (client-only, after hydration), keeping it out of the initial bundle.
+import type * as THREE from "three"
 
 export function ShaderAnimation() {
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<{
-    camera: THREE.Camera
-    scene: THREE.Scene
     renderer: THREE.WebGLRenderer
-    uniforms: any
+    geometry: THREE.BufferGeometry
+    material: THREE.Material
     animationId: number
   } | null>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
-
     const container = containerRef.current
+    let cancelled = false
+    let cleanupResize: (() => void) | null = null
 
-    // Vertex shader
-    const vertexShader = `
-      void main() {
-        gl_Position = vec4( position, 1.0 );
-      }
-    `
+    void (async () => {
+      const THREE = await import("three")
+      if (cancelled || !containerRef.current) return
 
-    // Fragment shader
-    const fragmentShader = `
-      #define TWO_PI 6.2831853072
-      #define PI 3.14159265359
+      // Vertex shader
+      const vertexShader = `
+        void main() {
+          gl_Position = vec4( position, 1.0 );
+        }
+      `
 
-      precision highp float;
-      uniform vec2 resolution;
-      uniform float time;
+      // Fragment shader
+      const fragmentShader = `
+        #define TWO_PI 6.2831853072
+        #define PI 3.14159265359
 
-      void main(void) {
-        vec2 uv = (gl_FragCoord.xy * 2.0 - resolution.xy) / min(resolution.x, resolution.y);
-        float t = time*0.05;
-        float lineWidth = 0.002;
+        precision highp float;
+        uniform vec2 resolution;
+        uniform float time;
 
-        vec3 color = vec3(0.0);
-        for(int j = 0; j < 3; j++){
-          for(int i=0; i < 5; i++){
-            color[j] += lineWidth*float(i*i) / abs(fract(t - 0.01*float(j)+float(i)*0.01)*5.0 - length(uv) + mod(uv.x+uv.y, 0.2));
+        void main(void) {
+          vec2 uv = (gl_FragCoord.xy * 2.0 - resolution.xy) / min(resolution.x, resolution.y);
+          float t = time*0.05;
+          float lineWidth = 0.002;
+
+          vec3 color = vec3(0.0);
+          for(int j = 0; j < 3; j++){
+            for(int i=0; i < 5; i++){
+              color[j] += lineWidth*float(i*i) / abs(fract(t - 0.01*float(j)+float(i)*0.01)*5.0 - length(uv) + mod(uv.x+uv.y, 0.2));
+            }
           }
+
+          gl_FragColor = vec4(color[0],color[1],color[2],1.0);
         }
+      `
 
-        gl_FragColor = vec4(color[0],color[1],color[2],1.0);
+      // Initialize Three.js scene
+      const camera = new THREE.Camera()
+      camera.position.z = 1
+
+      const scene = new THREE.Scene()
+      const geometry = new THREE.PlaneGeometry(2, 2)
+
+      const uniforms = {
+        time: { value: 1.0 },
+        resolution: { value: new THREE.Vector2() },
       }
-    `
 
-    // Initialize Three.js scene
-    const camera = new THREE.Camera()
-    camera.position.z = 1
+      const material = new THREE.ShaderMaterial({
+        uniforms: uniforms,
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShader,
+      })
 
-    const scene = new THREE.Scene()
-    const geometry = new THREE.PlaneGeometry(2, 2)
+      const mesh = new THREE.Mesh(geometry, material)
+      scene.add(mesh)
 
-    const uniforms = {
-      time: { type: "f", value: 1.0 },
-      resolution: { type: "v2", value: new THREE.Vector2() },
-    }
+      const renderer = new THREE.WebGLRenderer({ antialias: true })
+      renderer.setPixelRatio(window.devicePixelRatio)
 
-    const material = new THREE.ShaderMaterial({
-      uniforms: uniforms,
-      vertexShader: vertexShader,
-      fragmentShader: fragmentShader,
-    })
+      container.appendChild(renderer.domElement)
 
-    const mesh = new THREE.Mesh(geometry, material)
-    scene.add(mesh)
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true })
-    renderer.setPixelRatio(window.devicePixelRatio)
-
-    container.appendChild(renderer.domElement)
-
-    // Handle window resize
-    const onWindowResize = () => {
-      const width = container.clientWidth
-      const height = container.clientHeight
-      renderer.setSize(width, height)
-      uniforms.resolution.value.x = renderer.domElement.width
-      uniforms.resolution.value.y = renderer.domElement.height
-    }
-
-    // Initial resize
-    onWindowResize()
-    window.addEventListener("resize", onWindowResize, false)
-
-    // Animation loop
-    const animate = () => {
-      const animationId = requestAnimationFrame(animate)
-      uniforms.time.value += 0.05
-      renderer.render(scene, camera)
-
-      if (sceneRef.current) {
-        sceneRef.current.animationId = animationId
+      // Handle window resize
+      const onWindowResize = () => {
+        const width = container.clientWidth
+        const height = container.clientHeight
+        renderer.setSize(width, height)
+        uniforms.resolution.value.x = renderer.domElement.width
+        uniforms.resolution.value.y = renderer.domElement.height
       }
-    }
 
-    // Store scene references for cleanup
-    sceneRef.current = {
-      camera,
-      scene,
-      renderer,
-      uniforms,
-      animationId: 0,
-    }
+      // Initial resize
+      onWindowResize()
+      window.addEventListener("resize", onWindowResize, false)
+      cleanupResize = () => window.removeEventListener("resize", onWindowResize)
 
-    // Start animation
-    animate()
+      sceneRef.current = { renderer, geometry, material, animationId: 0 }
 
-    // Cleanup function
+      // Animation loop
+      const animate = () => {
+        const animationId = requestAnimationFrame(animate)
+        uniforms.time.value += 0.05
+        renderer.render(scene, camera)
+        if (sceneRef.current) sceneRef.current.animationId = animationId
+      }
+
+      animate()
+    })()
+
+    // Cleanup function (runs synchronously on unmount)
     return () => {
-      window.removeEventListener("resize", onWindowResize)
-
-      if (sceneRef.current) {
-        cancelAnimationFrame(sceneRef.current.animationId)
-
-        if (container && sceneRef.current.renderer.domElement) {
-          container.removeChild(sceneRef.current.renderer.domElement)
+      cancelled = true
+      cleanupResize?.()
+      const s = sceneRef.current
+      if (s) {
+        cancelAnimationFrame(s.animationId)
+        if (
+          container &&
+          s.renderer.domElement &&
+          container.contains(s.renderer.domElement)
+        ) {
+          container.removeChild(s.renderer.domElement)
         }
-
-        sceneRef.current.renderer.dispose()
-        geometry.dispose()
-        material.dispose()
+        s.renderer.dispose()
+        s.geometry.dispose()
+        s.material.dispose()
+        sceneRef.current = null
       }
     }
   }, [])
