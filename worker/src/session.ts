@@ -36,12 +36,13 @@ const MID_THOUGHT_SILENCE_MS = 5500;
 // they're stuck — flush so the agent can gently encourage them rather than
 // sit in dead air forever.
 const STUCK_SILENCE_MS = 12000;
-// No-response handling: after the agent asks, if the candidate says NOTHING
-// at all (no transcript chunks), we don't want to sit in dead air forever.
-// First a gentle check-in, then an offer to move on, then we stop nudging and
-// just wait.
-const NO_RESPONSE_FIRST_MS = 9000;
-const NO_RESPONSE_SECOND_MS = 13000;
+// No-response handling: ONLY when the candidate has said NOTHING at all since
+// the agent last spoke. Thresholds are generous because transcription lags
+// several seconds behind real speech (esp. on the poll-only path) — nudging
+// too early talks over a candidate who is mid-answer. A nudge is suppressed
+// entirely the moment any candidate speech is seen (see maybeNudgeOnSilence).
+const NO_RESPONSE_FIRST_MS = 16000;
+const NO_RESPONSE_SECOND_MS = 30000;
 // If the candidate produces NO speech at all for this long, assume they never
 // showed up (or left) and end the interview so the bot leaves the call.
 const ABANDON_SILENCE_MS = 5 * 60 * 1000;
@@ -118,11 +119,14 @@ export class SessionRunner {
   /** How many times we've nudged on the CURRENT silence (resets when they speak) */
   private noResponsePrompts = 0;
   /**
-   * Last time the candidate actually spoke (any non-bot chunk). Used to detect
-   * a candidate who never showed / left. Only resets on real speech — NOT when
-   * the agent talks — so nudges don't keep the abandonment clock alive.
+   * Last time the candidate actually spoke (any non-bot chunk). null until they
+   * speak for the first time. Drives BOTH the no-response nudge guard ("have
+   * they spoken since the agent's last turn?") and abandonment detection. Only
+   * set on real speech — never by the agent — so it reflects the candidate only.
    */
   private lastCandidateActivityAt: number | null = null;
+  /** Wall-clock when the interview loop went live; abandonment baseline. */
+  private interviewStartedAt = 0;
 
   constructor(sessionId: string) {
     this.sessionId = sessionId;
@@ -238,6 +242,7 @@ export class SessionRunner {
   }
 
   private async mainLoop() {
+    this.interviewStartedAt = Date.now();
     while (!this.stop) {
       await this.heartbeat();
       await this.refreshSession();
@@ -250,10 +255,11 @@ export class SessionRunner {
       }
 
       // Abandonment: candidate never spoke (or left) for too long — leave.
-      if (this.lastCandidateActivityAt === null) {
-        this.lastCandidateActivityAt = Date.now(); // baseline once we're live
-      }
-      if (Date.now() - this.lastCandidateActivityAt > ABANDON_SILENCE_MS) {
+      // Baseline off interview start until they first speak (so we DON'T treat
+      // the pre-speech window as "candidate activity" — that would suppress the
+      // no-response nudge guard which keys off lastCandidateActivityAt).
+      const lastActivity = this.lastCandidateActivityAt ?? this.interviewStartedAt;
+      if (Date.now() - lastActivity > ABANDON_SILENCE_MS) {
         logger.info(
           { sessionId: this.sessionId },
           "candidate absent for 5 min — leaving interview",
@@ -445,6 +451,20 @@ export class SessionRunner {
    */
   private async maybeNudgeOnSilence(): Promise<void> {
     if (this.awaitingSince === null) return;
+
+    // CRITICAL guard: if the candidate has spoken AT ALL since the agent's last
+    // turn, they're engaged — never nudge. Transcription lags several seconds
+    // behind real speech, so `pendingChunks` is often momentarily empty while
+    // the candidate is mid-answer; without this guard the bot talks over them
+    // ("take your time...") and the conversation derails. A nudge is only for
+    // genuine, total silence after the agent spoke.
+    if (
+      this.lastCandidateActivityAt !== null &&
+      this.lastCandidateActivityAt >= this.awaitingSince
+    ) {
+      return;
+    }
+
     const silent = Date.now() - this.awaitingSince;
 
     if (this.noResponsePrompts === 0 && silent > NO_RESPONSE_FIRST_MS) {
@@ -452,14 +472,14 @@ export class SessionRunner {
       await this.speakAgentTurn(
         null,
         null,
-        "[NO RESPONSE] The candidate has been silent and hasn't started answering. Briefly and calmly check in — reassure them it's fine to take a moment, and gently re-ask the current question in simpler words. One short sentence.",
+        "[NO RESPONSE] The candidate has said nothing at all since you spoke. Give ONE short, warm line that it's completely fine to take their time and you're ready whenever they are. Do NOT re-ask or rephrase the question. One short sentence.",
       );
     } else if (this.noResponsePrompts === 1 && silent > NO_RESPONSE_SECOND_MS) {
       this.noResponsePrompts = 2;
       await this.speakAgentTurn(
         null,
         null,
-        "[NO RESPONSE] The candidate is still silent. Gently offer to move on — say it's okay if they'd prefer to skip this one, and ask if they'd like to continue to the next question. One short sentence.",
+        "[NO RESPONSE] Still total silence. Briefly check whether they can hear you and would like to continue or move to the next question. One short sentence.",
       );
     } else if (this.noResponsePrompts >= 2 && silent > NO_RESPONSE_SECOND_MS) {
       // Stop nudging — wait quietly. Resumes if they speak (resets counter).
