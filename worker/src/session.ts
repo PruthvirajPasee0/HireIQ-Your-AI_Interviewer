@@ -18,14 +18,52 @@ import type {
   TranscriptTurn,
 } from "./types.js";
 
-// Tuned for responsiveness. Each turn is gated by:
+// Turn-taking. Each turn is gated by:
 //   POLL_INTERVAL_MS (how often we hit Attendee's transcript endpoint)
-//   + CANDIDATE_TURN_SILENCE_MS (how long the candidate must be quiet before
-//     we consider their turn complete and reply).
-// Lower = snappier. Too low = we cut the candidate off mid-thought.
+//   + a silence threshold (how long the candidate must be quiet before we
+//     consider their turn complete and reply).
+// Real candidates are nervous: they pause to think, use fillers ("um", "uh"),
+// and trail off mid-sentence. Replying too eagerly feels like an interruption,
+// so we wait, and we wait EVEN LONGER when their last words signal they're not
+// actually done (a filler or a dangling conjunction/preposition).
 const POLL_INTERVAL_MS = 1000;
-const CANDIDATE_TURN_SILENCE_MS = 1500;
+// Baseline: candidate finished on a normal word, just paused.
+const CANDIDATE_TURN_SILENCE_MS = 3000;
+// They trailed off mid-thought ("...built it using", "um", "and") — give them
+// real room to continue before we step in.
+const MID_THOUGHT_SILENCE_MS = 5500;
+// Safety cap: if all we have is filler and they've gone quiet this long,
+// they're stuck — flush so the agent can gently encourage them rather than
+// sit in dead air forever.
+const STUCK_SILENCE_MS = 12000;
+// No-response handling: after the agent asks, if the candidate says NOTHING
+// at all (no transcript chunks), we don't want to sit in dead air forever.
+// First a gentle check-in, then an offer to move on, then we stop nudging and
+// just wait.
+const NO_RESPONSE_FIRST_MS = 9000;
+const NO_RESPONSE_SECOND_MS = 13000;
+// If the candidate produces NO speech at all for this long, assume they never
+// showed up (or left) and end the interview so the bot leaves the call.
+const ABANDON_SILENCE_MS = 5 * 60 * 1000;
 const END_TOKEN = "<END_INTERVIEW>";
+
+// Pure disfluencies — never meaningful content on their own.
+const FILLERS = new Set([
+  "um", "uh", "umm", "uhh", "uhm", "er", "erm", "hmm", "hm", "mm", "mhm",
+  "ah", "eh", "like", "well",
+]);
+
+// If the candidate's LAST word is one of these, they're almost certainly
+// mid-sentence (dangling conjunction / preposition / article / auxiliary /
+// filler). Generous on purpose — the only cost of a false positive is waiting
+// a couple extra seconds, which is exactly what we want here.
+const TRAILING_INCOMPLETE = new Set([
+  ...FILLERS,
+  "and", "or", "but", "so", "because", "if", "then", "that", "which", "who",
+  "the", "a", "an", "of", "in", "on", "at", "to", "for", "with", "using",
+  "from", "by", "about", "into", "is", "was", "were", "are", "am", "be",
+  "my", "your", "his", "her", "its", "our", "their", "i", "we", "you", "it",
+]);
 
 export class SessionRunner {
   /**
@@ -71,6 +109,20 @@ export class SessionRunner {
   private pendingChunks: { ts: number; text: string; speaker: string }[] = [];
   /** When the last new non-bot transcript chunk arrived */
   private lastChunkAt: number | null = null;
+  /**
+   * When we started waiting for the candidate to respond (set at the end of
+   * every agent turn). Used to detect total silence and nudge. null = not
+   * currently waiting for a response.
+   */
+  private awaitingSince: number | null = null;
+  /** How many times we've nudged on the CURRENT silence (resets when they speak) */
+  private noResponsePrompts = 0;
+  /**
+   * Last time the candidate actually spoke (any non-bot chunk). Used to detect
+   * a candidate who never showed / left. Only resets on real speech — NOT when
+   * the agent talks — so nudges don't keep the abandonment clock alive.
+   */
+  private lastCandidateActivityAt: number | null = null;
 
   constructor(sessionId: string) {
     this.sessionId = sessionId;
@@ -90,6 +142,10 @@ export class SessionRunner {
     if (speakerName === this.botName) return; // skip our own TTS
     this.pendingChunks.push({ ts: timestampMs, text: clean, speaker: speakerName });
     this.lastChunkAt = Date.now();
+    // Candidate is responding — cancel any pending no-response nudges and reset
+    // the abandonment clock.
+    this.noResponsePrompts = 0;
+    this.lastCandidateActivityAt = Date.now();
   }
 
   async run(): Promise<void> {
@@ -193,6 +249,20 @@ export class SessionRunner {
         return;
       }
 
+      // Abandonment: candidate never spoke (or left) for too long — leave.
+      if (this.lastCandidateActivityAt === null) {
+        this.lastCandidateActivityAt = Date.now(); // baseline once we're live
+      }
+      if (Date.now() - this.lastCandidateActivityAt > ABANDON_SILENCE_MS) {
+        logger.info(
+          { sessionId: this.sessionId },
+          "candidate absent for 5 min — leaving interview",
+        );
+        await this.markStatus("ended", "candidate absent (5 min of silence)");
+        await this.finishUp();
+        return;
+      }
+
       // Pending control actions take priority
       const pendingAction = (this.session.controlActions ?? []).find((a) => !a.consumed);
       if (pendingAction) {
@@ -230,6 +300,9 @@ export class SessionRunner {
             return;
           }
         }
+      } else if (this.pendingChunks.length === 0) {
+        // Candidate hasn't said anything at all — consider a gentle nudge.
+        await this.maybeNudgeOnSilence();
       }
 
       await sleep(POLL_INTERVAL_MS);
@@ -260,7 +333,29 @@ export class SessionRunner {
   private turnComplete(): boolean {
     if (this.pendingChunks.length === 0) return false;
     if (this.lastChunkAt === null) return false;
-    return Date.now() - this.lastChunkAt > CANDIDATE_TURN_SILENCE_MS;
+    const silence = Date.now() - this.lastChunkAt;
+
+    const combined = this.pendingChunks.map((c) => c.text).join(" ");
+    const words = combined
+      .toLowerCase()
+      .split(/\s+/)
+      .map((w) => w.replace(/[^a-z']/g, ""))
+      .filter((w) => w.length > 0);
+
+    // Only filler so far ("um", "uh", "like") — the candidate is thinking, not
+    // finished. Hold off until they've clearly stalled, then flush so the
+    // agent can gently encourage rather than sit silent forever.
+    const meaningful = words.filter((w) => !FILLERS.has(w));
+    if (meaningful.length === 0) {
+      return silence > STUCK_SILENCE_MS;
+    }
+
+    // Trailing word signals a dangling, mid-sentence thought — wait longer.
+    const lastWord = words[words.length - 1];
+    const threshold = TRAILING_INCOMPLETE.has(lastWord)
+      ? MID_THOUGHT_SILENCE_MS
+      : CANDIDATE_TURN_SILENCE_MS;
+    return silence > threshold;
   }
 
   /**
@@ -312,8 +407,15 @@ export class SessionRunner {
   private async speakAgentTurn(
     pendingInjection: string | null,
     pendingAction: ControlAction["type"] | null,
+    liveNote: string | null = null,
   ): Promise<string> {
-    const msgs = buildMessages(this.agent, this.session, pendingInjection, pendingAction);
+    const msgs = buildMessages(
+      this.agent,
+      this.session,
+      pendingInjection,
+      pendingAction,
+      liveNote,
+    );
     const reply = await generateAgentReply(msgs);
     const cleanReply = reply.replace(END_TOKEN, "").trim();
 
@@ -330,7 +432,39 @@ export class SessionRunner {
       });
     }
 
+    // Start (or restart) the clock for waiting on the candidate's response.
+    this.awaitingSince = Date.now();
     return reply;
+  }
+
+  /**
+   * Called when the candidate has produced NO speech at all. Gently re-engages
+   * after a stretch of total silence so the interview doesn't stall in dead
+   * air. Escalates once (check-in -> offer to move on), then stops nudging and
+   * waits — the candidate may simply need more time.
+   */
+  private async maybeNudgeOnSilence(): Promise<void> {
+    if (this.awaitingSince === null) return;
+    const silent = Date.now() - this.awaitingSince;
+
+    if (this.noResponsePrompts === 0 && silent > NO_RESPONSE_FIRST_MS) {
+      this.noResponsePrompts = 1;
+      await this.speakAgentTurn(
+        null,
+        null,
+        "[NO RESPONSE] The candidate has been silent and hasn't started answering. Briefly and calmly check in — reassure them it's fine to take a moment, and gently re-ask the current question in simpler words. One short sentence.",
+      );
+    } else if (this.noResponsePrompts === 1 && silent > NO_RESPONSE_SECOND_MS) {
+      this.noResponsePrompts = 2;
+      await this.speakAgentTurn(
+        null,
+        null,
+        "[NO RESPONSE] The candidate is still silent. Gently offer to move on — say it's okay if they'd prefer to skip this one, and ask if they'd like to continue to the next question. One short sentence.",
+      );
+    } else if (this.noResponsePrompts >= 2 && silent > NO_RESPONSE_SECOND_MS) {
+      // Stop nudging — wait quietly. Resumes if they speak (resets counter).
+      this.awaitingSince = null;
+    }
   }
 
   private async appendTranscript(turn: TranscriptTurn) {

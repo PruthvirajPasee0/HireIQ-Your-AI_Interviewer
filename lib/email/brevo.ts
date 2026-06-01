@@ -18,6 +18,11 @@
 const KEY = process.env.BREVO_API_KEY;
 const FROM_EMAIL = process.env.BREVO_FROM_EMAIL ?? "noreply@hireiq.ai";
 const FROM_NAME = process.env.BREVO_FROM_NAME ?? "Hireiq.ai";
+// Email is rendered server-side (UTC on Vercel), so an unqualified
+// toLocaleString showed the wrong time. Format explicitly in the recruiter's
+// timezone (IST by default) and label it so the candidate is never confused.
+const INVITE_TZ = process.env.INVITE_TIMEZONE ?? "Asia/Kolkata";
+const INVITE_TZ_LABEL = process.env.INVITE_TIMEZONE_LABEL ?? "IST";
 
 export function emailConfigured(): boolean {
   return !!KEY;
@@ -37,10 +42,12 @@ export async function sendCandidateInvite(
 ): Promise<{ sent: boolean; reason?: string }> {
   if (!KEY) return { sent: false, reason: "BREVO_API_KEY not set" };
 
-  const when = new Date(params.scheduledAt).toLocaleString("en-US", {
-    dateStyle: "full",
-    timeStyle: "short",
-  });
+  const when =
+    new Date(params.scheduledAt).toLocaleString("en-US", {
+      dateStyle: "full",
+      timeStyle: "short",
+      timeZone: INVITE_TZ,
+    }) + ` ${INVITE_TZ_LABEL}`;
 
   const subject = `Your AI interview is scheduled — ${when}`;
 

@@ -19,7 +19,7 @@ export async function synth(text: string, voiceModel?: string): Promise<Buffer> 
 
   if (cartesiaFirst && cartesia.cartesiaConfigured()) {
     try {
-      return await cartesia.tts(text);
+      return await cartesia.tts(text, voiceModel);
     } catch (err) {
       logger.warn({ err }, "cartesia tts failed, attempting Deepgram fallback");
       if (deepgram.deepgramConfigured()) {
