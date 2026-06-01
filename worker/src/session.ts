@@ -27,17 +27,18 @@ import type {
 // so we wait, and we wait EVEN LONGER when their last words signal they're not
 // actually done (a filler or a dangling conjunction/preposition).
 const POLL_INTERVAL_MS = 1000;
-// Baseline: candidate finished on a normal word, just paused. Generous — a
-// nervous candidate often pauses to gather their next sentence; we'd rather
-// wait a beat too long than cut them off mid-thought.
-const CANDIDATE_TURN_SILENCE_MS = 4500;
-// They trailed off mid-thought ("...built it using", "um", "and") — give them
-// real room to continue before we step in.
-const MID_THOUGHT_SILENCE_MS = 7000;
-// A natural "thinking" beat before the agent starts speaking, so it doesn't
-// pounce the instant the candidate stops. Feels human; the small added latency
-// is an intentional trade for a calmer, less rushed conversation.
-const PRE_SPEAK_PAUSE_MS = 800;
+// Baseline: candidate finished on a normal word and went quiet. With realtime
+// transcription the chunks for one utterance arrive within ~1-2s, so a clean
+// 2s of silence reliably means "they're done" — and keeping it short stops the
+// conversation drifting a step behind (long waits let a late tail-fragment of
+// the SAME answer arrive after we replied, causing a redundant re-ask).
+const CANDIDATE_TURN_SILENCE_MS = 2000;
+// They trailed off mid-thought ("...built it using", "um", "and") — clearly not
+// finished, so wait longer before stepping in ("else wait for them to finish").
+const MID_THOUGHT_SILENCE_MS = 4000;
+// A short, natural beat before the agent speaks so it doesn't snap back the
+// instant they stop. Kept small so it doesn't add much latency.
+const PRE_SPEAK_PAUSE_MS = 500;
 // Safety cap: if all we have is filler and they've gone quiet this long,
 // they're stuck — flush so the agent can gently encourage them rather than
 // sit in dead air forever.
