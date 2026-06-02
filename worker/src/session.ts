@@ -27,6 +27,28 @@ import type {
 // so we wait, and we wait EVEN LONGER when their last words signal they're not
 // actually done (a filler or a dangling conjunction/preposition).
 const POLL_INTERVAL_MS = 1000;
+
+// ── Acoustic turn-taking (preferred) ─────────────────────────────────────
+// Driven by Attendee's participant_events.speech_start_stop — a near-realtime
+// voice-activity signal, NOT laggy transcript text. This is the correct way to
+// know when the candidate actually stopped talking.
+//
+// After a speech_stop, wait this long before committing the turn. A genuine
+// between-sentence pause produces a fresh speech_start within this window
+// (which cancels the commit); only a real end-of-turn survives it.
+const FINALIZE_AFTER_SPEECH_STOP_MS = 1200;
+// Once acoustically silent, hold at most this long for the (laggy) transcript
+// text to catch up to the end of speech before committing what we have.
+const MAX_TRANSCRIPT_CATCHUP_MS = 3000;
+// Transcript chunk timestamps can slightly precede the speech_stop timestamp;
+// allow a small grace when checking "has the transcript caught up?".
+const TRANSCRIPT_CATCHUP_GRACE_MS = 600;
+// Safety: if we're flagged "speaking" but see no candidate activity at all for
+// this long, assume a speech_stop event was dropped and treat them as stopped,
+// so the bot never hangs waiting for an event that isn't coming.
+const STALE_SPEAKING_MS = 8000;
+
+// ── Text-silence fallback (only when NO acoustic signal is available) ─────
 // Baseline silence before we treat a turn as done. Transcription lags real
 // speech by several seconds AND arrives in bursts, so too short a window cuts
 // off long answers / fires before the full answer has been delivered. 3.5s
@@ -96,6 +118,23 @@ export class SessionRunner {
     return true;
   }
 
+  /**
+   * Called by the webhook receiver on each Attendee
+   * `participant_events.speech_start_stop` event. Returns true if a live
+   * session consumed it.
+   */
+  static routeSpeechEvent(
+    botId: string,
+    eventType: "speech_start" | "speech_stop",
+    speakerName: string,
+    timestampMs: number,
+  ): boolean {
+    const runner = SessionRunner.byBotId.get(botId);
+    if (!runner) return false;
+    runner.ingestSpeechEvent(eventType, speakerName, timestampMs);
+    return true;
+  }
+
   private readonly sessionId: string;
   private session!: InterviewSession;
   private agent!: Agent;
@@ -134,6 +173,18 @@ export class SessionRunner {
   /** Wall-clock when the interview loop went live; abandonment baseline. */
   private interviewStartedAt = 0;
 
+  // ── Acoustic VAD state (Attendee speech_start_stop) ──
+  /** True while the candidate is acoustically speaking right now. */
+  private speaking = false;
+  /** Date.now() of the last speech_stop; null while speaking / before first. */
+  private lastSpeechStopAt: number | null = null;
+  /** Meeting timestamp_ms of the last speech_stop (compared to transcript ts). */
+  private lastSpeechStopTsMs = 0;
+  /** Meeting timestamp_ms of the latest transcript chunk we've buffered. */
+  private lastChunkTsMs = 0;
+  /** Once true, we trust acoustic events for turn-taking over text-silence. */
+  private haveSpeechSignal = false;
+
   constructor(sessionId: string) {
     this.sessionId = sessionId;
   }
@@ -152,10 +203,38 @@ export class SessionRunner {
     if (speakerName === this.botName) return; // skip our own TTS
     this.pendingChunks.push({ ts: timestampMs, text: clean, speaker: speakerName });
     this.lastChunkAt = Date.now();
+    this.lastChunkTsMs = Math.max(this.lastChunkTsMs, timestampMs);
     // Candidate is responding — cancel any pending no-response nudges and reset
     // the abandonment clock.
     this.noResponsePrompts = 0;
     this.lastCandidateActivityAt = Date.now();
+  }
+
+  /**
+   * Acoustic voice-activity event from Attendee. This is our PRIMARY turn-taking
+   * signal — it reflects when the candidate actually starts/stops talking, with
+   * near-zero lag, unlike transcript text which arrives seconds late. Cheap +
+   * synchronous; safe to call from the HTTP handler.
+   */
+  ingestSpeechEvent(
+    eventType: "speech_start" | "speech_stop",
+    speakerName: string,
+    timestampMs: number,
+  ): void {
+    if (speakerName && speakerName === this.botName) return; // ignore the bot
+    this.haveSpeechSignal = true;
+    this.lastCandidateActivityAt = Date.now();
+    if (eventType === "speech_start") {
+      // Candidate is talking now — never let a turn commit or a nudge fire.
+      this.speaking = true;
+      this.lastSpeechStopAt = null;
+      this.noResponsePrompts = 0;
+    } else {
+      // Candidate stopped — start the finalize timer.
+      this.speaking = false;
+      this.lastSpeechStopAt = Date.now();
+      this.lastSpeechStopTsMs = timestampMs;
+    }
   }
 
   async run(): Promise<void> {
@@ -344,6 +423,33 @@ export class SessionRunner {
 
   private turnComplete(): boolean {
     if (this.pendingChunks.length === 0) return false;
+
+    // ── Preferred: acoustic turn-taking via Attendee speech events ──
+    if (this.haveSpeechSignal) {
+      if (this.speaking) {
+        // Normally wait — but if a speech_stop was dropped, don't hang forever.
+        if (Date.now() - (this.lastCandidateActivityAt ?? 0) <= STALE_SPEAKING_MS) {
+          return false; // still talking — never interrupt
+        }
+        this.speaking = false;
+        this.lastSpeechStopAt = Date.now();
+        this.lastSpeechStopTsMs = this.lastChunkTsMs;
+      }
+      if (this.lastSpeechStopAt === null) return false; // no stop seen yet
+      const sinceStop = Date.now() - this.lastSpeechStopAt;
+      // Wait a beat in case this was just a between-sentence pause (a fresh
+      // speech_start would flip `speaking` back on and reset this).
+      if (sinceStop < FINALIZE_AFTER_SPEECH_STOP_MS) return false;
+      // Acoustically done. Hold until the (laggy) transcript has caught up to
+      // the end of their speech, so we don't answer a half-transcribed answer.
+      const transcriptCaughtUp =
+        this.lastChunkTsMs >= this.lastSpeechStopTsMs - TRANSCRIPT_CATCHUP_GRACE_MS;
+      if (transcriptCaughtUp) return true;
+      // Don't wait forever for transcript — commit what we have after a cap.
+      return sinceStop > MAX_TRANSCRIPT_CATCHUP_MS;
+    }
+
+    // ── Fallback: no acoustic signal — infer from text-arrival silence ──
     if (this.lastChunkAt === null) return false;
     const silence = Date.now() - this.lastChunkAt;
 
@@ -392,6 +498,9 @@ export class SessionRunner {
     }
     this.pendingChunks = [];
     this.lastChunkAt = null;
+    // Turn consumed — clear the acoustic finalize marker so a new turn only
+    // commits after the NEXT speech_start/speech_stop cycle.
+    this.lastSpeechStopAt = null;
     return { text, role: this.classifySpeaker(dominantSpeaker) };
   }
 
@@ -459,6 +568,8 @@ export class SessionRunner {
    */
   private async maybeNudgeOnSilence(): Promise<void> {
     if (this.awaitingSince === null) return;
+    // Candidate is acoustically speaking right now — never nudge over them.
+    if (this.speaking) return;
 
     // CRITICAL guard: if the candidate has spoken AT ALL since the agent's last
     // turn, they're engaged — never nudge. Transcription lags several seconds

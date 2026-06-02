@@ -117,11 +117,32 @@ function handleAttendeeWebhook(body: unknown): { ok: boolean; routed?: boolean }
     bot_id?: string;
     data?: {
       speaker_name?: string;
+      participant_name?: string;
+      event_type?: string;
       timestamp_ms?: number;
       transcription?: { transcript?: string } | string;
     };
   };
-  if (!b || b.trigger !== "transcript.update") return { ok: true };
+  if (!b || !b.bot_id || !b.data) return { ok: true };
+
+  // Acoustic voice-activity events — our near-realtime turn-taking signal.
+  if (b.trigger === "participant_events.speech_start_stop") {
+    const ev = b.data.event_type;
+    if (ev === "speech_start" || ev === "speech_stop") {
+      const ts =
+        typeof b.data.timestamp_ms === "number" ? b.data.timestamp_ms : Date.now();
+      const routed = SessionRunner.routeSpeechEvent(
+        b.bot_id,
+        ev,
+        b.data.participant_name ?? "",
+        ts,
+      );
+      if (routed) logger.info({ botId: b.bot_id, ev }, "speech event routed");
+    }
+    return { ok: true };
+  }
+
+  if (b.trigger !== "transcript.update") return { ok: true };
   const botId = b.bot_id;
   const d = b.data;
   if (!botId || !d) return { ok: true };

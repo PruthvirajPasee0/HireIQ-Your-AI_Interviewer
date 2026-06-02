@@ -114,6 +114,12 @@ export async function createBot(
   return call<AttendeeBot>(cfg, "POST", "/bots", {
     meeting_url: meetingUrl,
     bot_name: botName,
+    // Emit participant_events.speech_start_stop webhooks — the near-realtime
+    // acoustic VAD signal we use for turn-taking. Without this flag Attendee
+    // never produces the speech events even if the webhook is subscribed.
+    recording_settings: {
+      record_participant_speech_start_stop_events: true,
+    },
   });
 }
 
