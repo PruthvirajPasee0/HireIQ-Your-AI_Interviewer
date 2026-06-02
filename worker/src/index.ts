@@ -363,6 +363,33 @@ function main() {
     },
     "auto-dispatcher running",
   );
+  installShutdownHandlers();
+}
+
+/**
+ * Exit promptly on SIGTERM/SIGINT. Without this, a worker instance being
+ * replaced during a Render deploy keeps its Firestore onSnapshot listener
+ * alive while draining — leaving a ZOMBIE instance that races the new one for
+ * session dispatch (and can run stale code). Best-effort: ask any active bots
+ * to leave the call so they don't linger, with a short timeout, then exit.
+ */
+let shuttingDown = false;
+function installShutdownHandlers() {
+  const shutdown = async (sig: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ sig, active: active.size, worker: WORKER_ID }, "shutting down");
+    const leaves = [...active.values()].map((r) =>
+      r.leaveQuietly().catch(() => {}),
+    );
+    await Promise.race([
+      Promise.all(leaves),
+      new Promise((res) => setTimeout(res, 4000)),
+    ]);
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
 main();

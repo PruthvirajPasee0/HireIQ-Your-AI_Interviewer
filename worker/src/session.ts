@@ -660,6 +660,26 @@ export class SessionRunner {
       .update({ workerHeartbeatAt: new Date().toISOString() });
   }
 
+  /**
+   * Lightweight shutdown for process termination (SIGTERM on deploy). Stops the
+   * loop and asks the bot to leave the call so it doesn't linger — but does NOT
+   * generate feedback or flip status (the session may resume on the next
+   * instance). Best-effort.
+   */
+  async leaveQuietly(): Promise<void> {
+    this.stop = true;
+    if (this.handle?.attendeeBotId) {
+      SessionRunner.byBotId.delete(this.handle.attendeeBotId);
+    }
+    if (this.handle) {
+      try {
+        await this.provider.leaveBot(this.handle);
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+
   private async finishUp() {
     this.stop = true;
     if (this.handle?.attendeeBotId) {
