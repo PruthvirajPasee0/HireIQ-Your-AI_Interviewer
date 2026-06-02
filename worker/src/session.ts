@@ -27,15 +27,14 @@ import type {
 // so we wait, and we wait EVEN LONGER when their last words signal they're not
 // actually done (a filler or a dangling conjunction/preposition).
 const POLL_INTERVAL_MS = 1000;
-// Baseline: candidate finished on a normal word and went quiet. With realtime
-// transcription the chunks for one utterance arrive within ~1-2s, so a clean
-// 2s of silence reliably means "they're done" — and keeping it short stops the
-// conversation drifting a step behind (long waits let a late tail-fragment of
-// the SAME answer arrive after we replied, causing a redundant re-ask).
-const CANDIDATE_TURN_SILENCE_MS = 2000;
+// Baseline silence before we treat a turn as done. Transcription lags real
+// speech by several seconds AND arrives in bursts, so too short a window cuts
+// off long answers / fires before the full answer has been delivered. 3.5s
+// balances responsiveness against giving the STT pipeline time to catch up.
+const CANDIDATE_TURN_SILENCE_MS = 3500;
 // They trailed off mid-thought ("...built it using", "um", "and") — clearly not
-// finished, so wait longer before stepping in ("else wait for them to finish").
-const MID_THOUGHT_SILENCE_MS = 4000;
+// finished, so wait noticeably longer before stepping in.
+const MID_THOUGHT_SILENCE_MS = 6000;
 // A short, natural beat before the agent speaks so it doesn't snap back the
 // instant they stop. Kept small so it doesn't add much latency.
 const PRE_SPEAK_PAUSE_MS = 500;
@@ -48,8 +47,8 @@ const STUCK_SILENCE_MS = 12000;
 // several seconds behind real speech (esp. on the poll-only path) — nudging
 // too early talks over a candidate who is mid-answer. A nudge is suppressed
 // entirely the moment any candidate speech is seen (see maybeNudgeOnSilence).
-const NO_RESPONSE_FIRST_MS = 16000;
-const NO_RESPONSE_SECOND_MS = 30000;
+const NO_RESPONSE_FIRST_MS = 22000;
+const NO_RESPONSE_SECOND_MS = 42000;
 // If the candidate produces NO speech at all for this long, assume they never
 // showed up (or left) and end the interview so the bot leaves the call.
 const ABANDON_SILENCE_MS = 5 * 60 * 1000;
@@ -481,14 +480,14 @@ export class SessionRunner {
       await this.speakAgentTurn(
         null,
         null,
-        '[NO RESPONSE] The candidate has been silent since you spoke. Gently re-ask your current question in a slightly simpler way to help them engage. Do NOT use the phrase "take your time" or any variant of it. One short sentence.',
+        '[NO RESPONSE] The candidate has been silent for a while. Give ONE brief, gentle presence check — e.g. ask if they are still there / can hear you. Do NOT re-ask or rephrase the interview question (their answer may still be coming through). Do NOT use the phrase "take your time". One short sentence.',
       );
     } else if (this.noResponsePrompts === 1 && silent > NO_RESPONSE_SECOND_MS) {
       this.noResponsePrompts = 2;
       await this.speakAgentTurn(
         null,
         null,
-        '[NO RESPONSE] Still silent. Briefly ask whether they can hear you and would like to continue or move on to the next question. Do NOT use the phrase "take your time". One short sentence.',
+        '[NO RESPONSE] Still silent after a check-in. Briefly ask whether they would like to continue with this question or move on to the next one. Do NOT use the phrase "take your time". One short sentence.',
       );
     } else if (this.noResponsePrompts >= 2 && silent > NO_RESPONSE_SECOND_MS) {
       // Stop nudging — wait quietly. Resumes if they speak (resets counter).
