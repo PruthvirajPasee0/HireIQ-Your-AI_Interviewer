@@ -33,16 +33,18 @@ const POLL_INTERVAL_MS = 1000;
 // voice-activity signal, NOT laggy transcript text. This is the correct way to
 // know when the candidate actually stopped talking.
 //
-// After a speech_stop, wait this long before committing the turn. A genuine
-// between-sentence pause produces a fresh speech_start within this window
-// (which cancels the commit); only a real end-of-turn survives it.
-const FINALIZE_AFTER_SPEECH_STOP_MS = 1200;
-// Once acoustically silent, hold at most this long for the (laggy) transcript
-// text to catch up to the end of speech before committing what we have.
-const MAX_TRANSCRIPT_CATCHUP_MS = 3000;
-// Transcript chunk timestamps can slightly precede the speech_stop timestamp;
-// allow a small grace when checking "has the transcript caught up?".
-const TRANSCRIPT_CATCHUP_GRACE_MS = 600;
+// After a speech_stop, wait this long before even considering the turn done.
+// A genuine between-sentence pause produces a fresh speech_start within this
+// window (speech_start lag is only ~150ms), which flips `speaking` back on and
+// cancels the commit. Short because resume detection is near-instant.
+const FINALIZE_AFTER_SPEECH_STOP_MS = 800;
+// Measured: after you stop talking, transcript text keeps arriving for ~2–4.5s
+// (Attendee + Deepgram delivery). So instead of a fixed guess, we commit once
+// the transcript has STOPPED arriving — no new chunk for this long means the
+// STT pipeline has drained and we have the FULL answer (not a partial).
+const TRANSCRIPT_SETTLE_MS = 1500;
+// Hard cap so a pathological STT stall can never hang the interview.
+const MAX_WAIT_AFTER_STOP_MS = 9000;
 // Safety: if we're flagged "speaking" but see no candidate activity at all for
 // this long, assume a speech_stop event was dropped and treat them as stopped,
 // so the bot never hangs waiting for an event that isn't coming.
@@ -440,13 +442,16 @@ export class SessionRunner {
       // Wait a beat in case this was just a between-sentence pause (a fresh
       // speech_start would flip `speaking` back on and reset this).
       if (sinceStop < FINALIZE_AFTER_SPEECH_STOP_MS) return false;
-      // Acoustically done. Hold until the (laggy) transcript has caught up to
-      // the end of their speech, so we don't answer a half-transcribed answer.
-      const transcriptCaughtUp =
-        this.lastChunkTsMs >= this.lastSpeechStopTsMs - TRANSCRIPT_CATCHUP_GRACE_MS;
-      if (transcriptCaughtUp) return true;
-      // Don't wait forever for transcript — commit what we have after a cap.
-      return sinceStop > MAX_TRANSCRIPT_CATCHUP_MS;
+      // Commit once the transcript has STOPPED arriving — no new chunk for
+      // TRANSCRIPT_SETTLE_MS means the STT pipeline has drained and we have the
+      // candidate's FULL answer, not a half-transcribed fragment. This adapts
+      // to the real (variable) STT lag instead of guessing a fixed wait.
+      const sinceLastChunk = this.lastChunkAt
+        ? Date.now() - this.lastChunkAt
+        : 0;
+      if (sinceLastChunk >= TRANSCRIPT_SETTLE_MS) return true;
+      // Hard cap so a pathological STT stall can't hang the interview forever.
+      return sinceStop > MAX_WAIT_AFTER_STOP_MS;
     }
 
     // ── Fallback: no acoustic signal — infer from text-arrival silence ──
