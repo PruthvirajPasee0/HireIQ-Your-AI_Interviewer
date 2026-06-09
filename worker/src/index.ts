@@ -137,7 +137,13 @@ function handleAttendeeWebhook(body: unknown): { ok: boolean; routed?: boolean }
         b.data.participant_name ?? "",
         ts,
       );
-      if (routed) logger.info({ botId: b.bot_id, ev }, "speech event routed");
+      // lagMs = how long after the acoustic event we received it (≈ Attendee
+      // VAD delivery lag). Should be small (sub-second to ~1s).
+      if (routed)
+        logger.info(
+          { botId: b.bot_id, ev, lagMs: Date.now() - ts },
+          "speech event routed",
+        );
     }
     return { ok: true };
   }
@@ -161,8 +167,11 @@ function handleAttendeeWebhook(body: unknown): { ok: boolean; routed?: boolean }
     ts,
   );
   if (routed) {
+    // sttLagMs = wall-clock now minus the speech's meeting timestamp = the FULL
+    // STT pipeline lag (Attendee capture + Deepgram finalize + webhook deliver).
+    // This is the number that drives premature turn-commits. Expect a few sec.
     logger.info(
-      { botId, len: text.length },
+      { botId, len: text.length, sttLagMs: Date.now() - ts },
       "realtime transcript routed to session",
     );
   }
