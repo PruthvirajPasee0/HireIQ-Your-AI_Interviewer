@@ -700,7 +700,16 @@ export class SessionRunner {
       return;
     }
     try {
-      const fb = await generateFeedback(transcriptText);
+      const effectiveQuestions =
+        this.session.questions && this.session.questions.length > 0
+          ? this.session.questions
+          : (this.agent.questionBank ?? []);
+      const fb = await generateFeedback(transcriptText, {
+        role: this.agent.targetRole,
+        level: this.agent.level,
+        techstack: this.agent.techstack ?? [],
+        questions: effectiveQuestions,
+      });
       const ref = db.collection("feedback").doc();
       await ref.set({
         interviewId: this.sessionId, // reuse interviewId as sessionId

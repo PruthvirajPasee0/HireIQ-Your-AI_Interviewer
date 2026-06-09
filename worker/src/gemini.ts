@@ -68,22 +68,50 @@ const feedbackSchema = z.object({
 
 export type Feedback = z.infer<typeof feedbackSchema>;
 
-export async function generateFeedback(transcriptText: string): Promise<Feedback> {
+export interface FeedbackContext {
+  role: string;
+  level: string;
+  techstack: string[];
+  questions: string[];
+}
+
+export async function generateFeedback(
+  transcriptText: string,
+  ctx: FeedbackContext,
+): Promise<Feedback> {
+  const focus = ctx.techstack.length ? ctx.techstack.join(", ") : "general";
+  const questionsBlock = ctx.questions.length
+    ? ctx.questions.map((q, i) => `${i + 1}. ${q}`).join("\n")
+    : "(not recorded)";
+
   const { object } = await generateObject({
     model: structuredModel(),
     schema: feedbackSchema,
-    prompt: `You are an AI interviewer analyzing a live mock interview transcript. Be thorough. Don't be lenient.
-Score the candidate from 0-100 in each category:
-- Communication Skills: Clarity, articulation, structured responses.
-- Technical Knowledge: Understanding of key concepts for the role.
-- Problem Solving: Ability to analyze problems and propose solutions.
-- Cultural Fit: Alignment with company values and job role.
-- Confidence and Clarity: Confidence in responses, engagement, and clarity.
+    system:
+      "You are a fair, rigorous senior interviewer producing a calibrated, evidence-based assessment. Output structured JSON only.",
+    prompt: `Assess this candidate for the role of ${ctx.role} (level: ${ctx.level}; focus areas: ${focus}).
+
+CALIBRATE TO THE LEVEL. Judge against what is reasonable to expect from a ${ctx.level} ${ctx.role} — not an absolute world expert. A strong, level-appropriate answer should score highly even if it lacks the depth you'd expect from someone more senior. Conversely, hold a senior candidate to a higher bar.
+
+Questions that were asked:
+${questionsBlock}
+
+Score 0-100 in each category, INTERPRETING each for THIS specific role:
+- Communication Skills: clarity, structure, and articulation of answers.
+- Technical Knowledge: command of the domain knowledge that actually matters for a ${ctx.role}. For engineering roles this is technical depth in ${focus}; for non-engineering roles (e.g. product, data, design) interpret it as the relevant FUNCTIONAL expertise (product sense, analytical rigor, etc.), NOT generic coding.
+- Problem Solving: how well they reason through problems, weigh trade-offs, and justify decisions.
+- Cultural Fit: collaboration, ownership, and professionalism evident in their answers. Judge ONLY from what they actually said — do NOT invent or assume specific company values.
+- Confidence and Clarity: composure, engagement, and clarity of delivery.
+
+RULES (important for accuracy):
+- Be strictly EVIDENCE-BASED. Every score and comment must be grounded in what the candidate ACTUALLY said in the transcript; reference specifics in the comments.
+- If a topic wasn't covered, or the candidate said very little, do NOT fabricate competence — score conservatively and state plainly that the evidence was limited.
+- This is a SPOKEN interview transcribed automatically, so it contains transcription errors, fragments, fillers ("um", "uh"), and run-together words. Judge the candidate's INTENT and substance — do NOT penalize garbled words, mis-transcriptions, or speech disfluencies.
+- totalScore = overall suitability for a ${ctx.level} ${ctx.role}, weighted toward what matters MOST for that role (not a flat average).
+- strengths and areasForImprovement must be concrete and specific to THIS candidate's answers.
 
 Transcript:
 ${transcriptText}`,
-    system:
-      "You are a professional interviewer analyzing a live mock interview. Output structured JSON only.",
   });
   return object;
 }
