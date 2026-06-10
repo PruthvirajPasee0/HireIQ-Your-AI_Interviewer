@@ -28,23 +28,28 @@ import type {
 // actually done (a filler or a dangling conjunction/preposition).
 const POLL_INTERVAL_MS = 1000;
 
-// ── Acoustic turn-taking (preferred) ─────────────────────────────────────
-// Driven by Attendee's participant_events.speech_start_stop — a near-realtime
-// voice-activity signal, NOT laggy transcript text. This is the correct way to
-// know when the candidate actually stopped talking.
+// ── Acoustic turn-taking + transcript-coverage (the right way) ────────────
+// Attendee gives us TWO things on the same (epoch-ms) clock:
+//   • speech_start / speech_stop — near-realtime acoustic VAD (~0.9s lag).
+//   • transcript chunks — laggy text (2–4.5s) but each tagged with
+//     timestamp_ms + duration_ms (when the speech actually happened).
+// We commit a turn when the candidate has acoustically STOPPED *and* the
+// transcript text has CAUGHT UP to that stop point (latest chunk end ≥ stop
+// time). That means we have their FULL answer — no cutoff, no partial, no late
+// fragment left to cause drift — and we respond the instant it's complete
+// (adapts to the real lag instead of guessing a fixed wait).
 //
-// Fixed-silence turn-taking (current experiment). Once the candidate has been
-// acoustically silent for this long after they stop (no new speech_start), the
-// interviewer responds — even if the transcript is still catching up. Snappier
-// than waiting for the full transcript to settle; the speech_stop event already
-// lags real speech by ~0.9s, so this ≈ (this value + 0.9s) of real silence.
-// Tune to taste. 3s gives a thinking/nervous candidate room to resume a
-// mid-answer pause before the interviewer steps in (≈3.9s of real silence once
-// the ~0.9s speech_stop lag is added).
-const RESPOND_AFTER_SILENCE_MS = 3000;
-// Safety: if we're flagged "speaking" but see no candidate activity at all for
-// this long, assume a speech_stop event was dropped and treat them as stopped,
-// so the bot never hangs waiting for an event that isn't coming.
+// Brief beat after speech_stop so a quick resume (speech_start) can cancel.
+const FINALIZE_AFTER_SPEECH_STOP_MS = 600;
+// Transcript chunk end can land slightly before the speech_stop timestamp.
+const COVERAGE_GRACE_MS = 400;
+// Fallback when chunks lack duration_ms (poll path): commit once text has
+// stopped arriving for this long after speech_stop.
+const TRANSCRIPT_SETTLE_MS = 1200;
+// Hard cap so a missing chunk / clock issue can never hang the interview.
+const MAX_WAIT_AFTER_STOP_MS = 8000;
+// Safety: if flagged "speaking" but no candidate activity for this long, assume
+// a speech_stop was dropped and treat them as stopped.
 const STALE_SPEAKING_MS = 8000;
 
 // ── Text-silence fallback (only when NO acoustic signal is available) ─────
@@ -110,10 +115,11 @@ export class SessionRunner {
     speakerName: string,
     text: string,
     timestampMs: number,
+    durationMs = 0,
   ): boolean {
     const runner = SessionRunner.byBotId.get(botId);
     if (!runner) return false;
-    runner.ingestUtterance(speakerName, text, timestampMs);
+    runner.ingestUtterance(speakerName, text, timestampMs, durationMs);
     return true;
   }
 
@@ -179,8 +185,12 @@ export class SessionRunner {
   private lastSpeechStopAt: number | null = null;
   /** Meeting timestamp_ms of the last speech_stop (compared to transcript ts). */
   private lastSpeechStopTsMs = 0;
-  /** Meeting timestamp_ms of the latest transcript chunk we've buffered. */
-  private lastChunkTsMs = 0;
+  /**
+   * Meeting-clock END time (timestamp_ms + duration_ms) of the latest transcript
+   * chunk. When this reaches the speech_stop timestamp, the text has caught up
+   * to where the candidate stopped — i.e. we have their full answer.
+   */
+  private latestChunkEndMs = 0;
   /** Once true, we trust acoustic events for turn-taking over text-silence. */
   private haveSpeechSignal = false;
 
@@ -194,7 +204,12 @@ export class SessionRunner {
    * never processed twice regardless of which arrives first. Synchronous +
    * cheap so it's safe to call from the HTTP handler.
    */
-  ingestUtterance(speakerName: string, text: string, timestampMs: number): void {
+  ingestUtterance(
+    speakerName: string,
+    text: string,
+    timestampMs: number,
+    durationMs = 0,
+  ): void {
     const clean = (text ?? "").trim();
     if (!clean) return;
     if (timestampMs <= this.lastSeenTimestampMs) return; // already seen
@@ -202,7 +217,11 @@ export class SessionRunner {
     if (speakerName === this.botName) return; // skip our own TTS
     this.pendingChunks.push({ ts: timestampMs, text: clean, speaker: speakerName });
     this.lastChunkAt = Date.now();
-    this.lastChunkTsMs = Math.max(this.lastChunkTsMs, timestampMs);
+    // Track how far the transcript has covered, in meeting-clock time.
+    this.latestChunkEndMs = Math.max(
+      this.latestChunkEndMs,
+      timestampMs + (durationMs > 0 ? durationMs : 0),
+    );
     // Candidate is responding — cancel any pending no-response nudges and reset
     // the abandonment clock.
     this.noResponsePrompts = 0;
@@ -423,7 +442,7 @@ export class SessionRunner {
   private turnComplete(): boolean {
     if (this.pendingChunks.length === 0) return false;
 
-    // ── Preferred: acoustic turn-taking via Attendee speech events ──
+    // ── Preferred: acoustic stop + transcript caught up to the stop point ──
     if (this.haveSpeechSignal) {
       if (this.speaking) {
         // Normally wait — but if a speech_stop was dropped, don't hang forever.
@@ -432,14 +451,25 @@ export class SessionRunner {
         }
         this.speaking = false;
         this.lastSpeechStopAt = Date.now();
-        this.lastSpeechStopTsMs = this.lastChunkTsMs;
+        this.lastSpeechStopTsMs = this.latestChunkEndMs;
       }
       if (this.lastSpeechStopAt === null) return false; // no stop seen yet
-      // Fixed-silence rule: respond once they've been quiet RESPOND_AFTER_SILENCE_MS
-      // since the acoustic speech_stop (a fresh speech_start before then flips
-      // `speaking` back on and cancels this). We still require some transcript
-      // text (pendingChunks guard at the top) so we never reply to nothing.
-      return Date.now() - this.lastSpeechStopAt >= RESPOND_AFTER_SILENCE_MS;
+
+      const sinceStop = Date.now() - this.lastSpeechStopAt;
+      // Brief beat so a quick resume (speech_start) can cancel the commit.
+      if (sinceStop < FINALIZE_AFTER_SPEECH_STOP_MS) return false;
+
+      // PRIMARY: the transcript text has caught up to where they stopped — we
+      // now hold their FULL answer (no partial, no late fragment outstanding).
+      if (this.latestChunkEndMs >= this.lastSpeechStopTsMs - COVERAGE_GRACE_MS) {
+        return true;
+      }
+      // FALLBACK (e.g. chunk had no duration_ms): commit once the transcript
+      // has stopped arriving for a beat.
+      const sinceLastChunk = this.lastChunkAt ? Date.now() - this.lastChunkAt : 0;
+      if (sinceLastChunk >= TRANSCRIPT_SETTLE_MS) return true;
+      // Hard cap so a missing chunk / clock issue can never hang the interview.
+      return sinceStop > MAX_WAIT_AFTER_STOP_MS;
     }
 
     // ── Fallback: no acoustic signal — infer from text-arrival silence ──

@@ -120,6 +120,7 @@ function handleAttendeeWebhook(body: unknown): { ok: boolean; routed?: boolean }
       participant_name?: string;
       event_type?: string;
       timestamp_ms?: number;
+      duration_ms?: number;
       transcription?: { transcript?: string } | string;
     };
   };
@@ -158,6 +159,7 @@ function handleAttendeeWebhook(body: unknown): { ok: boolean; routed?: boolean }
       ? d.transcription
       : (d.transcription?.transcript ?? "");
   const ts = typeof d.timestamp_ms === "number" ? d.timestamp_ms : Date.now();
+  const durationMs = typeof d.duration_ms === "number" ? d.duration_ms : 0;
   if (!text) return { ok: true };
 
   const routed = SessionRunner.routeUtterance(
@@ -165,6 +167,7 @@ function handleAttendeeWebhook(body: unknown): { ok: boolean; routed?: boolean }
     d.speaker_name ?? "unknown",
     text,
     ts,
+    durationMs,
   );
   if (routed) {
     // sttLagMs = wall-clock now minus the speech's meeting timestamp = the FULL
