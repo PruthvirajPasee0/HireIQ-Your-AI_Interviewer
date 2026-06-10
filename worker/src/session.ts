@@ -38,8 +38,10 @@ const POLL_INTERVAL_MS = 1000;
 // interviewer responds — even if the transcript is still catching up. Snappier
 // than waiting for the full transcript to settle; the speech_stop event already
 // lags real speech by ~0.9s, so this ≈ (this value + 0.9s) of real silence.
-// Tune to taste (user wants ~2–2.5s feel).
-const RESPOND_AFTER_SILENCE_MS = 2000;
+// Tune to taste. 3s gives a thinking/nervous candidate room to resume a
+// mid-answer pause before the interviewer steps in (≈3.9s of real silence once
+// the ~0.9s speech_stop lag is added).
+const RESPOND_AFTER_SILENCE_MS = 3000;
 // Safety: if we're flagged "speaking" but see no candidate activity at all for
 // this long, assume a speech_stop event was dropped and treat them as stopped,
 // so the bot never hangs waiting for an event that isn't coming.
