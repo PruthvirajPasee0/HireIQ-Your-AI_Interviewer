@@ -432,13 +432,13 @@ export default function AgentForm({ mode, recruiterId, agent }: Props) {
                 className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-2"
               >
                 <input
-                  className={`${inputCls} flex-1 py-2`}
+                  className="flex-1 min-w-0 px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white text-sm placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                   value={r.skill}
                   onChange={(e) => updateRubric(i, { skill: e.target.value })}
                   placeholder="e.g. End-to-end payroll processing"
                 />
                 <select
-                  className={`${inputCls} w-20 py-2`}
+                  className="w-16 shrink-0 px-2 py-2 bg-white/5 border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={r.weight}
                   onChange={(e) =>
                     updateRubric(i, { weight: Number(e.target.value) })
