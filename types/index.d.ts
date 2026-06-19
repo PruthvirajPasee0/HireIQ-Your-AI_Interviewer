@@ -10,7 +10,27 @@ interface Feedback {
   strengths: string[];
   areasForImprovement: string[];
   finalAssessment: string;
+  /** Per-skill assessment against the job's rubric (JD-driven). */
+  skillScores?: Array<{
+    skill: string;
+    score: number;
+    evidence: string;
+    mustHave?: boolean;
+  }>;
+  /** Overall weighted "fit for this job" score (0-100). */
+  jobFitScore?: number;
+  /** Crisp hiring verdict for this role. */
+  recommendation?: "strong_fit" | "fit" | "borderline" | "not_a_fit";
   createdAt: string;
+}
+
+/** One competency the candidate is assessed on, derived from the job description. */
+interface RubricItem {
+  skill: string;
+  /** Relative importance 1-5 (drives the weighted job-fit score). */
+  weight: number;
+  /** A must-have skill — a gap here caps the overall recommendation. */
+  mustHave: boolean;
 }
 
 interface Interview {
@@ -62,6 +82,10 @@ interface Agent {
   targetRole: string;
   level: string;
   techstack: string[];
+  /** Raw job description pasted by the recruiter — drives questions + scoring. */
+  jobDescription?: string;
+  /** Editable skills rubric derived from the JD; the candidate is scored on it. */
+  rubric?: RubricItem[];
   createdAt: string;
 }
 
@@ -136,6 +160,8 @@ interface CreateAgentParams {
   targetRole: string;
   level: string;
   techstack: string[];
+  jobDescription?: string;
+  rubric?: RubricItem[];
 }
 
 interface UpdateAgentParams extends Partial<CreateAgentParams> {

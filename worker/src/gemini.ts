@@ -64,6 +64,20 @@ const feedbackSchema = z.object({
   strengths: z.array(z.string()),
   areasForImprovement: z.array(z.string()),
   finalAssessment: z.string(),
+  // JD-driven assessment. skillScores is per rubric skill (or derived skills if
+  // no rubric). jobFitScore is the weighted "fit for THIS job" headline.
+  skillScores: z
+    .array(
+      z.object({
+        skill: z.string(),
+        score: z.number().min(0).max(100),
+        evidence: z.string(),
+        mustHave: z.boolean(),
+      }),
+    )
+    .default([]),
+  jobFitScore: z.number().min(0).max(100),
+  recommendation: z.enum(["strong_fit", "fit", "borderline", "not_a_fit"]),
 });
 
 export type Feedback = z.infer<typeof feedbackSchema>;
@@ -73,6 +87,8 @@ export interface FeedbackContext {
   level: string;
   techstack: string[];
   questions: string[];
+  jobDescription?: string;
+  rubric?: { skill: string; weight: number; mustHave: boolean }[];
 }
 
 export async function generateFeedback(
@@ -84,17 +100,36 @@ export async function generateFeedback(
     ? ctx.questions.map((q, i) => `${i + 1}. ${q}`).join("\n")
     : "(not recorded)";
 
+  const jdBlock = ctx.jobDescription?.trim()
+    ? `\nJOB DESCRIPTION (assess fit against THIS):\n${ctx.jobDescription.trim()}\n`
+    : "";
+  const rubric = (ctx.rubric ?? []).filter((r) => r.skill?.trim());
+  const rubricBlock = rubric.length
+    ? `\nSCORING RUBRIC — score the candidate on EXACTLY these skills (skillScores), carrying over weight and mustHave for each:\n${rubric
+        .map(
+          (r) =>
+            `- ${r.skill} (weight ${r.weight}/5${r.mustHave ? ", MUST-HAVE" : ""})`,
+        )
+        .join("\n")}`
+    : `\nSCORING RUBRIC: none provided — derive 4-6 key skills for this role from the job description / role and score those (set mustHave=false unless clearly essential).`;
+
   const { object } = await generateObject({
     model: structuredModel(),
     schema: feedbackSchema,
     system:
       "You are a fair, rigorous senior interviewer producing a calibrated, evidence-based assessment. Output structured JSON only.",
     prompt: `Assess this candidate for the role of ${ctx.role} (level: ${ctx.level}; focus areas: ${focus}).
-
+${jdBlock}
 CALIBRATE TO THE LEVEL. Judge against what is reasonable to expect from a ${ctx.level} ${ctx.role} — not an absolute world expert. A strong, level-appropriate answer should score highly even if it lacks the depth you'd expect from someone more senior. Conversely, hold a senior candidate to a higher bar.
 
 Questions that were asked:
 ${questionsBlock}
+${rubricBlock}
+
+JOB-FIT ASSESSMENT (the most important output):
+- skillScores: score each rubric skill 0-100, grounded ONLY in transcript evidence. For each, set the "evidence" field to the specific thing the candidate said (or "Not demonstrated" if absent), and carry over mustHave.
+- jobFitScore (0-100): the candidate's overall fit FOR THIS JOB, weighted by each skill's weight (higher-weight skills count more). This is the headline number.
+- recommendation: "strong_fit" | "fit" | "borderline" | "not_a_fit". A gap on any MUST-HAVE skill caps the recommendation at "borderline" at best, no matter how strong the rest is.
 
 Score 0-100 in each category, INTERPRETING each for THIS specific role:
 - Communication Skills: clarity, structure, and articulation of answers.

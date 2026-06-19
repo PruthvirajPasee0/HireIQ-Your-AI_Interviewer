@@ -741,6 +741,8 @@ export class SessionRunner {
         level: this.agent.level,
         techstack: this.agent.techstack ?? [],
         questions: effectiveQuestions,
+        jobDescription: this.agent.jobDescription,
+        rubric: this.agent.rubric,
       });
       const ref = db.collection("feedback").doc();
       await ref.set({
@@ -751,6 +753,9 @@ export class SessionRunner {
         strengths: fb.strengths,
         areasForImprovement: fb.areasForImprovement,
         finalAssessment: fb.finalAssessment,
+        skillScores: fb.skillScores ?? [],
+        jobFitScore: fb.jobFitScore,
+        recommendation: fb.recommendation,
         createdAt: new Date().toISOString(),
       });
       await db

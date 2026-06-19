@@ -10,6 +10,17 @@ import {
 import DeleteSessionButton from "@/components/DeleteSessionButton";
 import DownloadPdfButton from "@/components/DownloadPdfButton";
 
+const RECOMMENDATION: Record<string, { label: string; cls: string }> = {
+  strong_fit: { label: "Strong fit", cls: "bg-green-500/20 text-green-300" },
+  fit: { label: "Fit", cls: "bg-emerald-500/15 text-emerald-300" },
+  borderline: { label: "Borderline", cls: "bg-yellow-500/15 text-yellow-300" },
+  not_a_fit: { label: "Not a fit", cls: "bg-red-500/15 text-red-300" },
+};
+
+function barColor(pct: number) {
+  return pct >= 75 ? "bg-green-500" : pct >= 50 ? "bg-yellow-500" : "bg-red-500";
+}
+
 export default async function SessionFeedbackPage({
   params,
 }: {
@@ -27,7 +38,7 @@ export default async function SessionFeedbackPage({
   const score = feedback?.totalScore ?? 0;
 
   return (
-    <section className="flex flex-col gap-6 print:bg-white print:text-black">
+    <section className="feedback-print flex flex-col gap-6 print:bg-white print:text-black">
       <div className="flex items-center justify-between print:hidden">
         <div>
           <h1 className="text-3xl font-semibold">{session.candidateName}</h1>
@@ -90,6 +101,62 @@ export default async function SessionFeedbackPage({
               </p>
             </div>
           </div>
+
+          {(feedback.jobFitScore != null ||
+            (feedback.skillScores?.length ?? 0) > 0) && (
+            <div className="glass-card p-6">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <h3 className="text-lg font-semibold">Job Fit</h3>
+                <div className="flex items-center gap-3">
+                  {feedback.recommendation &&
+                    RECOMMENDATION[feedback.recommendation] && (
+                      <span
+                        className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          RECOMMENDATION[feedback.recommendation].cls
+                        }`}
+                      >
+                        {RECOMMENDATION[feedback.recommendation].label}
+                      </span>
+                    )}
+                  {feedback.jobFitScore != null && (
+                    <span className="text-2xl font-bold text-indigo-300">
+                      {feedback.jobFitScore}
+                      <span className="text-sm text-white/50">/100</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col gap-4">
+                {feedback.skillScores?.map((s, i) => {
+                  const pct = Math.max(0, Math.min(100, s.score));
+                  return (
+                    <div key={i} className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium flex items-center gap-2">
+                          {s.skill}
+                          {s.mustHave && (
+                            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                              must-have
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-sm text-white/60">{s.score}/100</p>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-white/10">
+                        <div
+                          className={`h-2 rounded-full ${barColor(pct)}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      {s.evidence && (
+                        <p className="text-sm text-white/55">{s.evidence}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="glass-card p-6">
             <h3 className="text-lg font-semibold mb-4">Category Breakdown</h3>

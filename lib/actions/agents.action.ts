@@ -10,6 +10,19 @@ function assertRecruiter(user: User | null): asserts user is User {
   if (user.role !== "recruiter") throw new Error("Recruiter role required");
 }
 
+/** Clean + clamp a rubric coming from the client. */
+function sanitizeRubric(rubric?: RubricItem[]): RubricItem[] {
+  if (!Array.isArray(rubric)) return [];
+  return rubric
+    .map((r) => ({
+      skill: String(r?.skill ?? "").trim(),
+      weight: Math.max(1, Math.min(5, Math.round(Number(r?.weight) || 3))),
+      mustHave: Boolean(r?.mustHave),
+    }))
+    .filter((r) => r.skill.length > 0)
+    .slice(0, 20);
+}
+
 export async function createAgent(params: CreateAgentParams) {
   const user = await getCurrentUser();
   assertRecruiter(user);
@@ -29,6 +42,8 @@ export async function createAgent(params: CreateAgentParams) {
     targetRole: params.targetRole.trim(),
     level: params.level.trim(),
     techstack: params.techstack.map((t) => t.trim()).filter(Boolean),
+    jobDescription: (params.jobDescription ?? "").trim(),
+    rubric: sanitizeRubric(params.rubric),
     createdAt: new Date().toISOString(),
   };
 
@@ -91,6 +106,9 @@ export async function updateAgent(params: UpdateAgentParams) {
   if (params.level !== undefined) update.level = params.level.trim();
   if (params.techstack !== undefined)
     update.techstack = params.techstack.map((t) => t.trim()).filter(Boolean);
+  if (params.jobDescription !== undefined)
+    update.jobDescription = params.jobDescription.trim();
+  if (params.rubric !== undefined) update.rubric = sanitizeRubric(params.rubric);
 
   await ref.set(update, { merge: true });
   return { success: true } as const;

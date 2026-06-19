@@ -613,32 +613,32 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Print stylesheet — feedback page exports to PDF cleanly */
+/* ───────── Print stylesheet — feedback page → clean professional PDF ───────── */
 @media print {
-  /* Hide everything outside the report section */
+  @page {
+    margin: 1.4cm;
+  }
+
+  /* Let background colors (score bars, chips) actually render */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Reveal only the feedback report; hide app chrome */
   body * {
     visibility: hidden;
   }
-  .section-feedback,
-  .section-feedback *,
-  section.flex.flex-col.gap-6,
-  section.flex.flex-col.gap-6 * {
+  .feedback-print,
+  .feedback-print * {
     visibility: visible;
   }
-  /* Force a white background and dark text everywhere for print */
-  html,
-  body,
-  .dashboard-bg,
-  section,
-  div {
-    background: white !important;
-    color: black !important;
-    box-shadow: none !important;
+  .feedback-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
   }
-  .glass-card {
-    border: 1px solid #ddd !important;
-  }
-  /* Hide sidebars and navigation chrome */
   aside,
   nav,
   .mobile-nav,
@@ -646,14 +646,76 @@
   footer {
     display: none !important;
   }
-  /* Better link rendering */
-  a {
-    color: black !important;
-    text-decoration: none !important;
+
+  html,
+  body,
+  .dashboard-bg {
+    background: #fff !important;
   }
-  /* Avoid bad page breaks inside cards */
-  .glass-card,
-  .rounded-xl {
+
+  /* Readable dark text everywhere in the report */
+  .feedback-print,
+  .feedback-print h1,
+  .feedback-print h2,
+  .feedback-print h3,
+  .feedback-print p,
+  .feedback-print span,
+  .feedback-print div,
+  .feedback-print li,
+  .feedback-print a {
+    color: #18181b !important;
+    text-shadow: none !important;
+  }
+
+  /* Cards: clean white with a hairline border, no glow/blur */
+  .feedback-print .glass-card {
+    background: #fff !important;
+    border: 1px solid #e4e4e7 !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
     page-break-inside: avoid;
+  }
+
+  /* Headline numbers — strong indigo so they pop on white */
+  .feedback-print .text-indigo-300,
+  .feedback-print .text-indigo-200 {
+    color: #4f46e5 !important;
+  }
+
+  /* Score-bar track + fills keep their meaning */
+  .feedback-print .bg-white\/10 {
+    background: #ececf1 !important;
+  }
+  .feedback-print .bg-green-500 {
+    background: #16a34a !important;
+  }
+  .feedback-print .bg-yellow-500 {
+    background: #d97706 !important;
+  }
+  .feedback-print .bg-red-500 {
+    background: #dc2626 !important;
+  }
+
+  /* Chips: keep a readable dark accent on their faint tint */
+  .feedback-print .text-green-300 {
+    color: #15803d !important;
+  }
+  .feedback-print .text-red-300 {
+    color: #b91c1c !important;
+  }
+  .feedback-print .text-amber-300 {
+    color: #b45309 !important;
+  }
+
+  /* Expand the transcript so it isn't clipped to its scroll box */
+  .feedback-print .overflow-y-auto {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  a {
+    text-decoration: none !important;
   }
 }

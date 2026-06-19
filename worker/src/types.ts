@@ -58,6 +58,12 @@ export interface InterviewSession {
   endedAt?: string;
 }
 
+export interface RubricItem {
+  skill: string;
+  weight: number;
+  mustHave: boolean;
+}
+
 export interface Agent {
   id: string;
   ownerRecruiterId: string;
@@ -68,6 +74,10 @@ export interface Agent {
   targetRole: string;
   level: string;
   techstack: string[];
+  /** Job description (drives questions + scoring rubric). */
+  jobDescription?: string;
+  /** Skills rubric the candidate is scored against. */
+  rubric?: RubricItem[];
   createdAt: string;
 }
 
