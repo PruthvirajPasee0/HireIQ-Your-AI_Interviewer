@@ -1,21 +1,9 @@
 import "dotenv/config";
 import { createServer } from "node:http";
 import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
-import { FieldValue } from "firebase-admin/firestore";
 import { db } from "./firestore.js";
 import { logger } from "./logger.js";
 import { SessionRunner } from "./session.js";
-import { resolveForHandle } from "./provider.js";
-import type { BotHandle } from "./provider-types.js";
-import type { InterviewSession } from "./types.js";
-
-// Runtime ownership guard:
-// - "worker"    => this process owns live interview execution
-// - "functions" => Firebase Functions own execution
-const LIVE_INTERVIEW_RUNTIME = (
-  process.env.LIVE_INTERVIEW_RUNTIME ?? "worker"
-).toLowerCase();
-const WORKER_OWNS_RUNTIME = LIVE_INTERVIEW_RUNTIME === "worker";
 
 // Unique id for THIS worker process. Used to claim a session for dispatch so
 // that if two instances are briefly live at once (e.g. during a Render
@@ -202,11 +190,6 @@ function startHealthServer() {
       req.url &&
       req.url.startsWith("/webhooks/attendee")
     ) {
-      if (!WORKER_OWNS_RUNTIME) {
-        res.writeHead(202, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, ignored: "runtime_not_owner" }));
-        return;
-      }
       let raw = "";
       req.on("data", (c) => {
         raw += c;
@@ -273,8 +256,6 @@ const AUTO_DISPATCH_LEAD_MS = 30_000;
 // Don't auto-dispatch sessions whose scheduled time passed more than this
 // long ago — they're stale (recruiter probably abandoned them).
 const AUTO_DISPATCH_GRACE_MS = 2 * 60 * 60 * 1000;
-const RECORDING_RETENTION_MS = 2 * 24 * 60 * 60 * 1000;
-const RECORDING_MAINTENANCE_TICK_MS = 5 * 60 * 1000;
 
 async function autoDispatchTick() {
   const now = Date.now();
@@ -325,98 +306,6 @@ function startAutoDispatcher() {
   );
 }
 
-function getRecordingExpiryMs(session: InterviewSession): number {
-  const explicit = session.recordingAvailableUntil
-    ? Date.parse(session.recordingAvailableUntil)
-    : NaN;
-  if (Number.isFinite(explicit)) return explicit;
-  const endedAt = session.endedAt ? Date.parse(session.endedAt) : NaN;
-  if (Number.isFinite(endedAt)) return endedAt + RECORDING_RETENTION_MS;
-  return Date.now() + RECORDING_RETENTION_MS;
-}
-
-async function recordingMaintenanceTick() {
-  const now = Date.now();
-  const snap = await db
-    .collection("interviewSessions")
-    .where("status", "==", "ended")
-    .get();
-
-  for (const doc of snap.docs) {
-    const session = { id: doc.id, ...doc.data() } as InterviewSession;
-    const expiresAtMs = getRecordingExpiryMs(session);
-
-    if (now >= expiresAtMs) {
-      if (session.recordingStatus !== "expired") {
-        await doc.ref.update({
-          recordingStatus: "expired",
-          recordingDownloadUrl: FieldValue.delete(),
-          recordingCapturedAt: FieldValue.delete(),
-          recordingAvailableUntil: new Date(expiresAtMs).toISOString(),
-          recordingLiked: false,
-        });
-      }
-      continue;
-    }
-
-    if (
-      session.recordingStatus === "available" ||
-      session.recordingStatus === "expired" ||
-      session.recordingStatus === "unavailable"
-    ) {
-      continue;
-    }
-
-    if (!session.attendeeBotId && !session.vexaNativeMeetingId) continue;
-
-    const handle: BotHandle = {
-      provider: session.botProvider ?? "attendee",
-      attendeeBotId: session.attendeeBotId,
-      attendeeEndpoint: session.attendeeEndpoint,
-      vexaNativeMeetingId: session.vexaNativeMeetingId,
-      vexaNumericId: session.vexaNumericId,
-    };
-    const provider = resolveForHandle(handle);
-
-    try {
-      const recordingUrl = await provider.getRecordingDownloadUrl(handle);
-      if (!recordingUrl) {
-        if (!session.recordingStatus) {
-          await doc.ref.update({
-            recordingStatus: "pending",
-            recordingAvailableUntil: new Date(expiresAtMs).toISOString(),
-            recordingLiked: false,
-          });
-        }
-        continue;
-      }
-
-      await doc.ref.update({
-        recordingStatus: "available",
-        recordingDownloadUrl: recordingUrl,
-        recordingCapturedAt: new Date().toISOString(),
-        recordingAvailableUntil: new Date(expiresAtMs).toISOString(),
-      });
-    } catch (err) {
-      logger.warn(
-        { err, id: doc.id },
-        "recording maintenance lookup failed",
-      );
-    }
-  }
-}
-
-function startRecordingMaintenance() {
-  setInterval(() => {
-    recordingMaintenanceTick().catch((err) =>
-      logger.error({ err }, "recording maintenance tick crashed"),
-    );
-  }, RECORDING_MAINTENANCE_TICK_MS);
-  recordingMaintenanceTick().catch((err) =>
-    logger.error({ err }, "initial recording maintenance tick crashed"),
-  );
-}
-
 function watchSessions() {
   db.collection("interviewSessions")
     .where("status", "==", "bot_dispatching")
@@ -461,15 +350,6 @@ function watchSessions() {
 }
 
 function main() {
-  startHealthServer();
-  if (!WORKER_OWNS_RUNTIME) {
-    logger.info(
-      { runtime: LIVE_INTERVIEW_RUNTIME },
-      "worker runtime disabled by LIVE_INTERVIEW_RUNTIME (health only)",
-    );
-    return;
-  }
-
   for (const key of [
     "FIREBASE_PROJECT_ID",
     "FIREBASE_CLIENT_EMAIL",
@@ -484,17 +364,16 @@ function main() {
     }
   }
   logger.info("worker started — watching interviewSessions");
+  startHealthServer();
   watchSessions();
   startAutoDispatcher();
-  startRecordingMaintenance();
   logger.info(
     {
       tickMs: AUTO_DISPATCH_TICK_MS,
       leadMs: AUTO_DISPATCH_LEAD_MS,
       graceMs: AUTO_DISPATCH_GRACE_MS,
-      recordingTickMs: RECORDING_MAINTENANCE_TICK_MS,
     },
-    "auto-dispatcher and recording maintenance running",
+    "auto-dispatcher running",
   );
   installShutdownHandlers();
 }

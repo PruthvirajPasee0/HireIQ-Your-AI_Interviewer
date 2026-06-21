@@ -17,8 +17,6 @@ export interface NormalizedTranscriptEntry {
   text: string;
   /** Monotonic ms timestamp from the start of the meeting. */
   timestampMs: number;
-  /** Optional utterance duration in milliseconds (if provider supplies it). */
-  durationMs?: number;
 }
 
 export interface BotProvider {
@@ -31,7 +29,5 @@ export interface BotProvider {
   getTranscript(handle: BotHandle): Promise<NormalizedTranscriptEntry[]>;
   /** Play an MP3 buffer into the meeting as the bot's audio. */
   outputAudio(handle: BotHandle, audioMp3: Buffer): Promise<void>;
-  /** Provider-hosted recording URL if available (null when unavailable/not ready). */
-  getRecordingDownloadUrl(handle: BotHandle): Promise<string | null>;
   leaveBot(handle: BotHandle): Promise<void>;
 }

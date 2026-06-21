@@ -46,9 +46,6 @@ const COVERAGE_GRACE_MS = 400;
 // Fallback when chunks lack duration_ms (poll path): commit once text has
 // stopped arriving for this long after speech_stop.
 const TRANSCRIPT_SETTLE_MS = 1200;
-// Even in fallback mode, require a short post-stop catch-up window so we don't
-// commit immediately on stale transcript gaps.
-const MIN_TRANSCRIPT_CATCHUP_AFTER_STOP_MS = 2200;
 // Hard cap so a missing chunk / clock issue can never hang the interview.
 const MAX_WAIT_AFTER_STOP_MS = 8000;
 // Safety: if flagged "speaking" but no candidate activity for this long, assume
@@ -82,7 +79,6 @@ const NO_RESPONSE_SECOND_MS = 42000;
 // showed up (or left) and end the interview so the bot leaves the call.
 const ABANDON_SILENCE_MS = 5 * 60 * 1000;
 const END_TOKEN = "<END_INTERVIEW>";
-const RECORDING_RETENTION_MS = 2 * 24 * 60 * 60 * 1000;
 
 // Pure disfluencies — never meaningful content on their own.
 const FILLERS = new Set([
@@ -439,12 +435,7 @@ export class SessionRunner {
     // dedup on lastSeenTimestampMs means an utterance delivered by BOTH the
     // webhook and this poll is only ever buffered once.
     for (const e of newOnes) {
-      this.ingestUtterance(
-        e.speakerName,
-        e.text,
-        e.timestampMs,
-        e.durationMs ?? 0,
-      );
+      this.ingestUtterance(e.speakerName, e.text, e.timestampMs);
     }
   }
 
@@ -476,12 +467,7 @@ export class SessionRunner {
       // FALLBACK (e.g. chunk had no duration_ms): commit once the transcript
       // has stopped arriving for a beat.
       const sinceLastChunk = this.lastChunkAt ? Date.now() - this.lastChunkAt : 0;
-      if (
-        sinceStop >= MIN_TRANSCRIPT_CATCHUP_AFTER_STOP_MS &&
-        sinceLastChunk >= TRANSCRIPT_SETTLE_MS
-      ) {
-        return true;
-      }
+      if (sinceLastChunk >= TRANSCRIPT_SETTLE_MS) return true;
       // Hard cap so a missing chunk / clock issue can never hang the interview.
       return sinceStop > MAX_WAIT_AFTER_STOP_MS;
     }
@@ -581,18 +567,6 @@ export class SessionRunner {
       logger.info({ reply: cleanReply.slice(0, 120) }, "agent turn");
       // Natural beat before speaking — don't pounce the instant they stop.
       await sleep(PRE_SPEAK_PAUSE_MS);
-      // If candidate resumes while we're about to speak, yield this turn.
-      const allowBargeInYield = !pendingInjection && !pendingAction;
-      if (
-        allowBargeInYield &&
-        (this.speaking || this.pendingChunks.length > 0)
-      ) {
-        logger.info(
-          { sessionId: this.sessionId },
-          "candidate resumed during pre-speak pause; yielding bot reply",
-        );
-        return "";
-      }
       const audio = await synth(cleanReply, this.agent.voiceProfile);
       if (this.handle) {
         await this.provider.outputAudio(this.handle, audio);
@@ -742,63 +716,13 @@ export class SessionRunner {
       }
     }
     await this.generateAndSaveFeedback();
-    const endedAt = new Date().toISOString();
-    const recordingAvailableUntil = new Date(
-      Date.parse(endedAt) + RECORDING_RETENTION_MS
-    ).toISOString();
     await db
       .collection("interviewSessions")
       .doc(this.sessionId)
       .update({
         status: "ended",
-        endedAt,
-        recordingStatus: "pending",
-        recordingAvailableUntil,
-        recordingLiked: false,
+        endedAt: new Date().toISOString(),
       });
-    this.session.status = "ended";
-    this.session.endedAt = endedAt;
-    this.session.recordingStatus = "pending";
-    this.session.recordingAvailableUntil = recordingAvailableUntil;
-    this.session.recordingLiked = false;
-
-    await this.tryAttachRecordingDownloadUrl();
-  }
-
-  private async tryAttachRecordingDownloadUrl() {
-    if (!this.handle) return;
-
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      try {
-        const url = await this.provider.getRecordingDownloadUrl(this.handle);
-        if (url) {
-          const capturedAt = new Date().toISOString();
-          await db
-            .collection("interviewSessions")
-            .doc(this.sessionId)
-            .update({
-              recordingStatus: "available",
-              recordingDownloadUrl: url,
-              recordingCapturedAt: capturedAt,
-            });
-          this.session.recordingStatus = "available";
-          this.session.recordingDownloadUrl = url;
-          this.session.recordingCapturedAt = capturedAt;
-          return;
-        }
-      } catch (err) {
-        logger.warn(
-          { err, sessionId: this.sessionId, attempt },
-          "recording url lookup failed during finish",
-        );
-      }
-      await sleep(5000);
-    }
-
-    logger.info(
-      { sessionId: this.sessionId },
-      "recording url not ready yet; keeping status pending for maintenance retry",
-    );
   }
 
   private async generateAndSaveFeedback() {

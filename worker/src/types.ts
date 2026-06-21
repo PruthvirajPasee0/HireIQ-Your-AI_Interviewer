@@ -49,20 +49,6 @@ export interface InterviewSession {
   transcript: TranscriptTurn[];
   feedbackId?: string;
   failureReason?: string;
-  /**
-   * Interview recording lifecycle:
-   * - pending: still processing / not captured yet
-   * - available: downloadable now
-   * - expired: auto-removed after retention window
-   * - unavailable: provider did not supply recording
-   */
-  recordingStatus?: "pending" | "available" | "expired" | "unavailable";
-  recordingDownloadUrl?: string;
-  recordingCapturedAt?: string;
-  recordingAvailableUntil?: string;
-  recordingLiked?: boolean;
-  reviewStatus?: "new" | "reviewed" | "shortlisted" | "rejected";
-  reviewedAt?: string;
   /** Per-session questions (set by AI from candidate resume). Overrides agent.questionBank. */
   questions?: string[];
   /** AI-generated 1-2 sentence summary of the candidate's resume. */

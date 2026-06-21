@@ -114,10 +114,6 @@ export async function createBot(
   return call<AttendeeBot>(cfg, "POST", "/bots", {
     meeting_url: meetingUrl,
     bot_name: botName,
-    // Emit participant_events.speech_start_stop webhooks for acoustic VAD.
-    recording_settings: {
-      record_participant_speech_start_stop_events: true,
-    },
   });
 }
 

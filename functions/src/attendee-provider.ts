@@ -45,31 +45,6 @@ function endpointOfHandle(handle: BotHandle): AttendeeEndpoint {
   return handle.attendeeEndpoint ?? "cloud";
 }
 
-function extractRecordingUrl(
-  bot: unknown,
-  baseUrl: string,
-): string | null {
-  if (!bot || typeof bot !== "object") return null;
-  const raw = bot as Record<string, unknown>;
-  const candidates = [
-    raw.recording_url,
-    raw.recordingUrl,
-    raw.download_url,
-    raw.downloadUrl,
-    raw.mp4_url,
-    raw.video_url,
-  ];
-
-  for (const value of candidates) {
-    if (typeof value !== "string" || value.trim().length === 0) continue;
-    const clean = value.trim();
-    if (clean.startsWith("http://") || clean.startsWith("https://")) return clean;
-    if (clean.startsWith("/")) return `${baseUrl}${clean}`;
-  }
-
-  return null;
-}
-
 class AttendeeProvider implements BotProvider {
   name: "attendee" = "attendee";
 
@@ -156,7 +131,6 @@ class AttendeeProvider implements BotProvider {
         speakerName: e.speaker_name,
         text: extractTextFromAttendee(e.transcription),
         timestampMs: e.timestamp_ms,
-        durationMs: e.duration_ms,
       }))
       .filter((e) => e.text.length > 0);
   }
@@ -165,18 +139,6 @@ class AttendeeProvider implements BotProvider {
     if (!handle.attendeeBotId) throw new Error("no attendee bot id");
     const cfg = getConfigForEndpoint(endpointOfHandle(handle));
     await outputAudio(cfg, handle.attendeeBotId, audioMp3);
-  }
-
-  async getRecordingDownloadUrl(handle: BotHandle): Promise<string | null> {
-    if (!handle.attendeeBotId) return null;
-    const cfg = getConfigForEndpoint(endpointOfHandle(handle));
-    try {
-      const bot = await getBot(cfg, handle.attendeeBotId);
-      return extractRecordingUrl(bot, cfg.baseUrl);
-    } catch (err) {
-      logger.warn({ err }, "attendee recording url lookup failed");
-      return null;
-    }
   }
 
   async leaveBot(handle: BotHandle): Promise<void> {

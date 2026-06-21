@@ -51,9 +51,6 @@ After each, follow the post-install steps in:
 Then update `worker/.env`:
 
 ```bash
-# Runtime ownership (prevents duplicate runners if functions are deployed)
-LIVE_INTERVIEW_RUNTIME=worker
-
 # Switch Attendee to self-hosted
 ATTENDEE_BASE_URL=http://localhost:8000
 ATTENDEE_API_KEY=<the key you generated in the local Attendee UI>

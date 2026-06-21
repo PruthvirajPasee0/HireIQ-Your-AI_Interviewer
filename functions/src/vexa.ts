@@ -139,10 +139,6 @@ class VexaProvider implements BotProvider {
         speakerName: s.speaker ?? "unknown",
         text: s.text.trim(),
         timestampMs: Math.floor(s.start_time * 1000),
-        durationMs: Math.max(
-          0,
-          Math.floor((s.end_time - s.start_time) * 1000),
-        ),
       }));
   }
 
@@ -156,10 +152,6 @@ class VexaProvider implements BotProvider {
         format: "mp3",
       },
     );
-  }
-
-  async getRecordingDownloadUrl(_handle: BotHandle): Promise<string | null> {
-    return null;
   }
 
   async leaveBot(handle: BotHandle): Promise<void> {
