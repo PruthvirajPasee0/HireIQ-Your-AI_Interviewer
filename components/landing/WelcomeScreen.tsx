@@ -377,24 +377,25 @@ export default function WelcomeScreen({ children }: Props) {
       window.addEventListener("resize", onResize);
     })();
 
+    const cleanupRefs = threeRefs.current;
+
     return () => {
       cancelled = true;
       if (onResize) window.removeEventListener("resize", onResize);
-      const refs = threeRefs.current;
-      if (refs.animationId) cancelAnimationFrame(refs.animationId);
-      refs.stars.forEach((s) => {
+      if (cleanupRefs.animationId) cancelAnimationFrame(cleanupRefs.animationId);
+      cleanupRefs.stars.forEach((s) => {
         s.geometry.dispose();
         (s.material as THREE.Material).dispose();
       });
-      refs.mountains.forEach((m) => {
+      cleanupRefs.mountains.forEach((m) => {
         m.geometry.dispose();
         (m.material as THREE.Material).dispose();
       });
-      if (refs.nebula) {
-        refs.nebula.geometry.dispose();
-        (refs.nebula.material as THREE.Material).dispose();
+      if (cleanupRefs.nebula) {
+        cleanupRefs.nebula.geometry.dispose();
+        (cleanupRefs.nebula.material as THREE.Material).dispose();
       }
-      refs.renderer?.dispose();
+      cleanupRefs.renderer?.dispose();
     };
   }, [fullyHidden]);
 

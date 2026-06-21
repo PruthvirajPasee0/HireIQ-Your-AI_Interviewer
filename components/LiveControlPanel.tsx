@@ -10,9 +10,13 @@ import {
   dispatchSessionNow,
   getSessionForRecruiter,
 } from "@/lib/actions/sessions.action";
+import {
+  getSessionStatusBadgeClass,
+  getSessionStatusMeta,
+} from "@/lib/session-status";
 
 const inputCls =
-  "input w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200";
+  "input w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-transparent transition-all duration-200";
 
 type Props = {
   initial: InterviewSession;
@@ -95,6 +99,8 @@ export default function LiveControlPanel({ initial, agentName }: Props) {
   const isActive =
     session.status === "in_progress" || session.status === "bot_joined";
   const isEnded = session.status === "ended" || session.status === "failed";
+  const statusMeta = getSessionStatusMeta(session.status);
+  const statusBadgeClass = getSessionStatusBadgeClass(session.status);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -110,14 +116,25 @@ export default function LiveControlPanel({ initial, agentName }: Props) {
                 </span>
               </p>
             </div>
-            <span className="text-xs px-2 py-1 rounded bg-white/10">
-              {session.status}
+            <span className={`text-xs px-2 py-1 rounded ${statusBadgeClass}`}>
+              {statusMeta.label}
             </span>
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 text-xs text-white/60">
             <span>Agent: {agentName}</span>
             <span>
               Q {session.currentQuestionIndex + 1} of bank
+            </span>
+            <span>{statusMeta.description}</span>
+            <span>
+              Recording:{" "}
+              {session.recordingStatus === "available"
+                ? "available"
+                : session.recordingStatus === "expired"
+                ? "expired"
+                : session.recordingStatus === "unavailable"
+                ? "unavailable"
+                : "processing"}
             </span>
             <a
               href={session.meetLink}

@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: result.message || "Failed" }, { status: 400 });
     }
     return NextResponse.json({ success: true });
-  } catch (e: any) {
+  } catch {
     return NextResponse.json({ success: false, message: "Invalid request" }, { status: 400 });
   }
 }

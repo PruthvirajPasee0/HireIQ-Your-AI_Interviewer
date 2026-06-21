@@ -9,6 +9,15 @@ import { SessionRunner } from "./session";
 
 setGlobalOptions({ region: "us-central1" });
 
+// Runtime ownership guard:
+// - "worker"    => external worker process owns live interview execution
+// - "functions" => Firebase Functions own execution
+// Default is "worker" to avoid duplicate runners when both are deployed.
+const LIVE_INTERVIEW_RUNTIME = (
+  process.env.LIVE_INTERVIEW_RUNTIME ?? "worker"
+).toLowerCase();
+const FUNCTIONS_OWNS_RUNTIME = LIVE_INTERVIEW_RUNTIME === "functions";
+
 // Secrets injected from Google Secret Manager at runtime.
 // Set with: firebase functions:secrets:set <NAME>
 const ATTENDEE_CLOUD_API_KEY = defineSecret("ATTENDEE_CLOUD_API_KEY");
@@ -40,6 +49,9 @@ export const onSessionDispatch = onDocumentUpdated(
     secrets: allSecrets,
   },
   async (event) => {
+    if (!FUNCTIONS_OWNS_RUNTIME) {
+      return;
+    }
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!after) return;
@@ -75,6 +87,9 @@ export const autoDispatchScheduled = onSchedule(
     memory: "256MiB",
   },
   async () => {
+    if (!FUNCTIONS_OWNS_RUNTIME) {
+      return;
+    }
     const now = Date.now();
     const cutoffEarliest = now - AUTO_DISPATCH_GRACE_MS;
     const cutoffLatest = now + AUTO_DISPATCH_LEAD_MS;

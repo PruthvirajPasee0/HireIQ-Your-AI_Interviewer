@@ -3,6 +3,7 @@ import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/actions/auth.action";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -48,6 +49,21 @@ export async function POST(req: NextRequest) {
     if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
     if (user.role !== "recruiter")
       return Response.json({ error: "Recruiter only" }, { status: 403 });
+    const rateLimit = await enforceRateLimit({
+      namespace: "agents-from-jd",
+      key: user.id,
+      limit: 30,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!rateLimit.allowed) {
+      return Response.json(
+        { error: "Rate limit exceeded. Please try again later." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        }
+      );
+    }
 
     const body = await req.json().catch(() => ({}));
     const jobDescription = String(body?.jobDescription ?? "").trim();

@@ -3,7 +3,6 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { verifyInviteToken } from "@/lib/invite-token";
 import { getSessionById } from "@/lib/actions/sessions.action";
-import { getAgentById } from "@/lib/actions/agents.action";
 import { db } from "@/firebase/admin";
 import LocalTime from "@/components/LocalTime";
 

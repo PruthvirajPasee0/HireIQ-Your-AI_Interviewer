@@ -51,6 +51,9 @@ export async function createInterviewSession(
     customInjections: [],
     controlActions: [],
     transcript: [],
+    recordingStatus: "pending",
+    recordingLiked: false,
+    reviewStatus: "new",
     createdAt: new Date().toISOString(),
   };
   if (params.questions && params.questions.length > 0) {
@@ -95,13 +98,19 @@ export async function createInterviewSession(
   return { success: true, sessionId: ref.id, inviteToken, emailSent } as const;
 }
 
-export async function getSessionsByRecruiter(): Promise<InterviewSession[]> {
-  const user = await getCurrentUser();
-  if (!user || user.role !== "recruiter") return [];
+export async function getSessionsByRecruiter(
+  recruiterId?: string
+): Promise<InterviewSession[]> {
+  let resolvedRecruiterId = recruiterId;
+  if (!resolvedRecruiterId) {
+    const user = await getCurrentUser();
+    if (!user || user.role !== "recruiter") return [];
+    resolvedRecruiterId = user.id;
+  }
 
   const snap = await db
     .collection(SESSIONS)
-    .where("recruiterId", "==", user.id)
+    .where("recruiterId", "==", resolvedRecruiterId)
     .get();
 
   const sessions = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as InterviewSession[];
@@ -183,6 +192,45 @@ export async function appendControlAction(
   return { success: true } as const;
 }
 
+export async function setSessionRecordingLiked(
+  sessionId: string,
+  liked: boolean
+) {
+  const user = await getCurrentUser();
+  assertRecruiter(user);
+
+  const ref = db.collection(SESSIONS).doc(sessionId);
+  const doc = await ref.get();
+  if (!doc.exists) return { success: false, message: "Session not found" } as const;
+  const data = doc.data() as InterviewSession;
+  if (data.recruiterId !== user.id)
+    return { success: false, message: "Forbidden" } as const;
+
+  await ref.update({ recordingLiked: liked });
+  return { success: true } as const;
+}
+
+export async function setSessionReviewStatus(
+  sessionId: string,
+  reviewStatus: "new" | "reviewed" | "shortlisted" | "rejected"
+) {
+  const user = await getCurrentUser();
+  assertRecruiter(user);
+
+  const ref = db.collection(SESSIONS).doc(sessionId);
+  const doc = await ref.get();
+  if (!doc.exists) return { success: false, message: "Session not found" } as const;
+  const data = doc.data() as InterviewSession;
+  if (data.recruiterId !== user.id)
+    return { success: false, message: "Forbidden" } as const;
+
+  await ref.update({
+    reviewStatus,
+    reviewedAt: new Date().toISOString(),
+  });
+  return { success: true } as const;
+}
+
 export async function getFeedbackById(feedbackId: string): Promise<Feedback | null> {
   const doc = await db.collection("feedback").doc(feedbackId).get();
   if (!doc.exists) return null;
@@ -248,6 +296,13 @@ export async function dispatchSessionNow(sessionId: string) {
     update.customInjections = [];
     update.controlActions = [];
     update.endedAt = null;
+    update.recordingStatus = "pending";
+    update.recordingDownloadUrl = null;
+    update.recordingCapturedAt = null;
+    update.recordingAvailableUntil = null;
+    update.recordingLiked = false;
+    update.reviewStatus = "new";
+    update.reviewedAt = null;
   }
 
   await ref.update(update);

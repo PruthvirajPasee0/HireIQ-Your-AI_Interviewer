@@ -138,6 +138,13 @@ interface InterviewSession {
   transcript: TranscriptTurn[];
   feedbackId?: string;
   failureReason?: string;
+  recordingStatus?: "pending" | "available" | "expired" | "unavailable";
+  recordingDownloadUrl?: string;
+  recordingCapturedAt?: string;
+  recordingAvailableUntil?: string;
+  recordingLiked?: boolean;
+  reviewStatus?: "new" | "reviewed" | "shortlisted" | "rejected";
+  reviewedAt?: string;
   /**
    * Per-session question bank. If non-empty, the worker uses these instead
    * of the agent's reusable questionBank. Populated by AI question generation
@@ -188,6 +195,7 @@ interface InterviewCardProps {
   type: string;
   techstack: string[];
   createdAt?: string;
+  feedback?: Feedback | null;
 }
 
 interface AgentProps {

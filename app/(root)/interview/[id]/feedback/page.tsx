@@ -10,6 +10,7 @@ import {
 } from "@/lib/actions/general.action";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/actions/auth.action";
+import AutoRefresh from "@/components/AutoRefresh";
 
 const Feedback = async ({ params }: RouteParams) => {
   const { id } = await params;
@@ -18,12 +19,54 @@ const Feedback = async ({ params }: RouteParams) => {
     getCurrentUser(),
     getInterviewById(id),
   ]);
-  if (!interview) redirect("/");
+  if (!user) redirect("/sign-in");
+  if (!interview) redirect("/dashboard");
+  if (interview.userId !== user.id) redirect(`/interview/${id}`);
 
   const feedback = await getFeedbackByInterviewId({
     interviewId: id,
-    userId: user?.id!,
+    userId: user.id,
   });
+
+  if (!feedback) {
+    return (
+      <section className="section-feedback">
+        <AutoRefresh
+          enabled
+          intervalMs={3000}
+          statusUrl={`/api/interviews/${id}/feedback-status`}
+        />
+        <div className="flex flex-col gap-3 items-center text-center">
+          <h1 className="text-4xl font-semibold">
+            Feedback on the Interview -{" "}
+            <span className="capitalize">{interview.role}</span> Interview
+          </h1>
+          <p className="text-light-400 max-w-2xl">
+            {interview.finalized
+              ? "Your interview is complete. We are generating your feedback now."
+              : "Your interview is still in progress. Feedback will appear after completion."}
+          </p>
+          <p className="text-sm text-light-400">Auto-refreshing every 3 seconds.</p>
+        </div>
+        <div className="buttons">
+          <Button asChild className="btn-secondary flex-1">
+            <Link href="/dashboard" prefetch className="flex w-full justify-center">
+              <p className="text-sm font-semibold text-primary-200 text-center">
+                Back to dashboard
+              </p>
+            </Link>
+          </Button>
+          <Button asChild className="btn-primary flex-1">
+            <Link href={`/interview/${id}`} prefetch className="flex w-full justify-center">
+              <p className="text-sm font-semibold text-black text-center">
+                Open Interview
+              </p>
+            </Link>
+          </Button>
+        </div>
+      </section>
+    );
+  }
 
   const score = feedback?.totalScore ?? 0;
   const radius = 56; // SVG circle radius
@@ -70,12 +113,12 @@ const Feedback = async ({ params }: RouteParams) => {
             <div className="absolute inset-0 rotate-0 flex items-center justify-center">
               <div className="text-center">
                 <p className={`text-4xl font-bold ${scoreColor}`}>{score}</p>
-                <p className="text-xs text-light-500">out of 100</p>
+                <p className="text-xs text-light-400">out of 100</p>
               </div>
             </div>
           </div>
           <div className="text-center">
-            <p className="text-sm text-light-300">Overall Impression</p>
+            <p className="text-sm text-light-400">Overall Impression</p>
           </div>
         </div>
 
@@ -106,7 +149,7 @@ const Feedback = async ({ params }: RouteParams) => {
                 <div className="h-2 w-full rounded-full bg-light-400/20">
                   <div className={`h-2 rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                 </div>
-                <p className="text-sm text-light-300">{category.comment}</p>
+                <p className="text-sm text-light-400">{category.comment}</p>
               </div>
             );
           })}
@@ -139,12 +182,12 @@ const Feedback = async ({ params }: RouteParams) => {
 
       {/* Actions */}
       <div className="buttons">
-        <Button className="btn-secondary flex-1">
-          <Link href="/" prefetch className="flex w-full justify-center">
+        <Button asChild className="btn-secondary flex-1">
+          <Link href="/dashboard" prefetch className="flex w-full justify-center">
             <p className="text-sm font-semibold text-primary-200 text-center">Back to dashboard</p>
           </Link>
         </Button>
-        <Button className="btn-primary flex-1">
+        <Button asChild className="btn-primary flex-1">
           <Link href={`/interview/${id}`} prefetch className="flex w-full justify-center">
             <p className="text-sm font-semibold text-black text-center">Retake Interview</p>
           </Link>

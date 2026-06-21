@@ -18,7 +18,7 @@ const RecruiterLayout = async ({ children }: { children: ReactNode }) => {
         ]}
       />
       <div className="hidden md:block fixed left-0 top-0 h-screen z-30">
-        <Sidebar user={user as any} />
+        <Sidebar user={user} variant="recruiter" />
       </div>
 
       <div
@@ -28,7 +28,7 @@ const RecruiterLayout = async ({ children }: { children: ReactNode }) => {
         <div className="mx-auto max-w-7xl px-4 md:px-6 py-6">
           <main className="flex flex-col gap-6">
             <div className="md:hidden">
-              <MobileNav user={user as any} />
+              <MobileNav user={user} variant="recruiter" />
             </div>
             {children}
           </main>

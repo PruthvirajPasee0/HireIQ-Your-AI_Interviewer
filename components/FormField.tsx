@@ -32,7 +32,7 @@ const FormField = <T extends FieldValues>({
           <FormLabel className="label text-white font-medium tracking-wide">{label}</FormLabel>
           <FormControl>
             <Input
-              className="input w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+              className="input w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-transparent transition-all duration-200"
               type={type}
               placeholder={placeholder}
               {...field}

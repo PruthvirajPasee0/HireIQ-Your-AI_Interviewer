@@ -9,14 +9,15 @@ import { cn } from "@/lib/utils";
 
 interface RunnerProps {
   userName: string;
-  userId?: string;
   interviewId: string;
   questions: string[];
 }
 
 type SavedMessage = { role: "user" | "assistant"; content: string };
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
 
-export default function InterviewRunner({ userName, userId, interviewId, questions }: RunnerProps) {
+export default function InterviewRunner({ userName, interviewId, questions }: RunnerProps) {
   const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [messages, setMessages] = useState<SavedMessage[]>([]);
@@ -29,6 +30,7 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
   const audioChunksRef = useRef<BlobPart[]>([]);
   // Prevent duplicate speaks in React Strict Mode and track asked base questions
   const askedSetRef = useRef<Set<number>>(new Set());
+  const [askedCount, setAskedCount] = useState(0);
   // Track greeting/farewell and UI start state
   const greetedRef = useRef<boolean>(false);
   const farewellRef = useRef<boolean>(false);
@@ -91,8 +93,8 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
         audio.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Audio play failed")); };
         audio.play();
       });
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to play audio");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || "Failed to play audio");
     } finally {
       setIsSpeaking(false);
       // Hide assistant text after speech completes or on error
@@ -117,8 +119,8 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
       // Hide assistant text while user is speaking
       setDisplayAssistantText(null);
       setIsProcessing(false);
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to start recording");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || "Failed to start recording");
     }
   };
 
@@ -132,7 +134,7 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
     });
     setRecording(false);
     // Ensure tracks are stopped to release mic
-    const stream: MediaStream | undefined = (mr as any).stream;
+    const stream = (mr as MediaRecorder & { stream?: MediaStream }).stream;
     stream?.getTracks().forEach((t) => t.stop());
 
     setIsProcessing(true);
@@ -168,7 +170,7 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
           mr.stop();
         });
         setRecording(false);
-        const stream: MediaStream | undefined = (mr as any).stream;
+        const stream = (mr as MediaRecorder & { stream?: MediaStream }).stream;
         stream?.getTracks().forEach((t) => t.stop());
 
         // Transcribe the just-recorded audio and include it in transcript
@@ -190,7 +192,7 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
       }
       // Not recording: finalize immediately
       await finalizeInterview(messages);
-    } catch (e: any) {
+    } catch {
       await finalizeInterview(messages);
     }
   };
@@ -204,6 +206,7 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
     // Mark this base question as asked to keep progress accurate and avoid duplicate prompts
     if (!askedSetRef.current.has(currentIndex)) {
       askedSetRef.current.add(currentIndex);
+      setAskedCount(askedSetRef.current.size);
     }
     // We are now starting if not already
     setHasStarted(true);
@@ -242,44 +245,15 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
   }, []);
 
   // Decide next question or follow-up based on transcript and conversation state
-  const decideNextStep = async (latestTranscript: string, allMsgs: SavedMessage[]) => {
+  const decideNextStep = async (_latestTranscript: string, allMsgs: SavedMessage[]) => {
     try {
-      const baseNext = questions[currentIndex + 1] || null;
-      setIsProcessing(true);
-      const res = await fetch("/api/next-question", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: allMsgs,
-          baseQuestion: baseNext,
-          // Remaining base questions count (follow-ups should not consume base budget)
-          remainingCount: Math.max(0, questions.length - (currentIndex + 1)),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.error || "next-question failed");
-
-      // type: 'followup' | 'base' | 'end'
-      if (data.type === "followup" && data.question) {
-        // Ask a short contextual follow-up without advancing index
-        await speak(data.question);
-        if (!recording) await startRecording();
+      if (currentIndex + 1 < questions.length) {
+        setCurrentIndex((i) => i + 1);
         return;
       }
 
-      if (data.type === "base") {
-        // Move to the next base question only if within bounds and we still have budget
-        if (currentIndex + 1 < questions.length) {
-          setCurrentIndex((i) => i + 1);
-          // stay in processing until the next question TTS begins
-          return;
-        }
-        // No base left, fall through to end
-      }
-
-      // End of conversation or fallback
       await finalizeInterview(allMsgs);
-    } catch (e: any) {
+    } catch {
       // Fallback to original sequential behavior on failure
       const askedSoFar = allMsgs.filter((m) => m.role === "assistant").length;
       const remainingBudget = Math.max(0, questions.length - askedSoFar);
@@ -304,7 +278,6 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           interviewId,
-          userId: userId!,
           transcript: allMessages,
         }),
       });
@@ -313,11 +286,11 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
         router.push(`/interview/${interviewId}/feedback`);
       } else {
         toast.error(data?.error || "Failed to create feedback");
-        router.push("/");
+        router.push("/dashboard");
       }
-    } catch (e: any) {
-      toast.error(e?.message || "Feedback failed");
-      router.push("/");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || "Feedback failed");
+      router.push("/dashboard");
     }
   };
 
@@ -325,7 +298,7 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
     <>
       {/* Compact status row: X/Y Questions • Status */}
       <div className="w-full mb-2 flex items-center justify-between text-white/80 text-sm">
-        <span>{askedSetRef.current.size}/{Math.max(1, questions.length)} Questions</span>
+        <span>{askedCount}/{Math.max(1, questions.length)} Questions</span>
         <span>
           {isSpeaking ? "Speaking" : recording ? "Listening" : isProcessing ? "Processing" : "Idle"}
         </span>
@@ -335,7 +308,7 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
         <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
           {(() => {
             const total = Math.max(1, questions.length);
-            const progress = Math.round((askedSetRef.current.size / total) * 100);
+            const progress = Math.round((askedCount / total) * 100);
             return (
               <div className="progress" style={{ width: `${progress}%` }} />
             );
@@ -388,8 +361,8 @@ export default function InterviewRunner({ userName, userId, interviewId, questio
           <div className="transcript">
             {isSpeaking || displayAssistantText ? (
               <div className="flex flex-col items-center gap-1 w-full">
-                {askedSetRef.current.size > 0 && (
-                  <span className="text-xs text-white/60">Question {Math.min(questions.length, Math.max(1, askedSetRef.current.size))} of {Math.max(1, questions.length)}</span>
+                {askedCount > 0 && (
+                  <span className="text-xs text-white/60">Question {Math.min(questions.length, Math.max(1, askedCount))} of {Math.max(1, questions.length)}</span>
                 )}
                 <p className={cn("transition-opacity duration-500 opacity-0", "animate-fadeIn opacity-100")}>{displayAssistantText}</p>
               </div>

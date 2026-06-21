@@ -9,6 +9,13 @@ import {
 } from "@/lib/actions/sessions.action";
 import DeleteSessionButton from "@/components/DeleteSessionButton";
 import DownloadPdfButton from "@/components/DownloadPdfButton";
+import AutoRefresh from "@/components/AutoRefresh";
+import SessionRecordingControls from "@/components/SessionRecordingControls";
+import SessionReplayWorkspace from "@/components/SessionReplayWorkspace";
+import {
+  getSessionStatusBadgeClass,
+  getSessionStatusMeta,
+} from "@/lib/session-status";
 
 const RECOMMENDATION: Record<string, { label: string; cls: string }> = {
   strong_fit: { label: "Strong fit", cls: "bg-green-500/20 text-green-300" },
@@ -34,6 +41,8 @@ export default async function SessionFeedbackPage({
   const feedback = session.feedbackId
     ? await getFeedbackById(session.feedbackId)
     : null;
+  const statusMeta = getSessionStatusMeta(session.status);
+  const statusBadgeClass = getSessionStatusBadgeClass(session.status);
 
   const score = feedback?.totalScore ?? 0;
 
@@ -75,13 +84,26 @@ export default async function SessionFeedbackPage({
 
       {!feedback ? (
         <div className="glass-card p-6 rounded-xl border border-white/10 bg-white/[0.06]">
+          <AutoRefresh
+            enabled
+            intervalMs={3000}
+            statusUrl={`/api/recruiter/sessions/${id}/feedback-status`}
+          />
           <p className="font-medium">
             {session.status === "ended"
               ? "Generating feedback..."
               : "Feedback will appear here once the interview ends."}
           </p>
-          <p className="text-sm text-white/60 mt-1">
-            Status: {session.status}
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <span className={`text-xs px-2 py-1 rounded ${statusBadgeClass}`}>
+              {statusMeta.label}
+            </span>
+            <p className="text-xs text-white/60">
+              Auto-refreshing every 3 seconds.
+            </p>
+          </div>
+          <p className="text-xs text-white/55 mt-2">
+            {statusMeta.description}
           </p>
         </div>
       ) : (
@@ -217,6 +239,23 @@ export default async function SessionFeedbackPage({
             </div>
           </div>
         </>
+      )}
+
+      <SessionRecordingControls
+        sessionId={session.id}
+        recordingStatus={session.recordingStatus}
+        recordingDownloadUrl={session.recordingDownloadUrl}
+        recordingAvailableUntil={session.recordingAvailableUntil}
+        recordingLiked={session.recordingLiked}
+      />
+
+      {feedback && (
+        <SessionReplayWorkspace
+          transcript={session.transcript ?? []}
+          categoryScores={feedback.categoryScores ?? []}
+          recordingStatus={session.recordingStatus}
+          recordingDownloadUrl={session.recordingDownloadUrl}
+        />
       )}
 
       <div className="glass-card p-6">

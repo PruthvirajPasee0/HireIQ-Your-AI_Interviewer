@@ -5,6 +5,13 @@ import { cookies } from "next/headers";
 
 // Session duration (1 week)
 const SESSION_DURATION = 60 * 60 * 24 * 7;
+const getErrorCode = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  typeof (error as { code?: unknown }).code === "string"
+    ? ((error as { code: string }).code as string)
+    : "";
 
 // Set session cookie
 export async function setSessionCookie(idToken: string) {
@@ -48,11 +55,11 @@ export async function signUp(params: SignUpParams) {
       success: true,
       message: "Account created successfully. Please sign in.",
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating user:", error);
 
     // Handle Firebase specific errors
-    if (error.code === "auth/email-already-exists") {
+    if (getErrorCode(error) === "auth/email-already-exists") {
       return {
         success: false,
         message: "This email is already in use",
@@ -82,7 +89,9 @@ export async function signIn(params: SignInParams) {
     try {
       const decoded = await auth.verifyIdToken(idToken);
       // e.g., decoded.firebase.sign_in_provider === 'google.com'
-      signInProvider = (decoded as any)?.firebase?.sign_in_provider;
+      signInProvider = (
+        decoded as { firebase?: { sign_in_provider?: string } }
+      )?.firebase?.sign_in_provider;
     } catch {}
 
     // Ensure a Firestore user document exists and sync Google avatar if applicable
@@ -98,7 +107,7 @@ export async function signIn(params: SignInParams) {
       });
     } else if (signInProvider === "google.com") {
       // Keep the profile photo in sync with Google on Google sign-in
-      const payload: Record<string, any> = {};
+      const payload: Record<string, string> = {};
       if (userRecord.displayName) payload.name = userRecord.displayName;
       if (userRecord.email) payload.email = userRecord.email;
       if (userRecord.photoURL) payload.profileURL = userRecord.photoURL;
@@ -110,9 +119,8 @@ export async function signIn(params: SignInParams) {
     await setSessionCookie(idToken);
 
     return { success: true };
-  } catch (error: any) {
-    console.log("");
-
+  } catch (error: unknown) {
+    console.error("signIn error", error);
     return {
       success: false,
       message: "Failed to log into account. Please try again.",
@@ -194,7 +202,7 @@ export async function updateUserProfile(data: { name?: string; profileURL?: stri
 
   try {
     const decoded = await auth.verifySessionCookie(sessionCookie, true);
-    const payload: Record<string, any> = {};
+    const payload: Record<string, string> = {};
     if (typeof data.name === "string") payload.name = data.name;
     if (typeof data.profileURL === "string") payload.profileURL = data.profileURL;
     if (Object.keys(payload).length === 0)

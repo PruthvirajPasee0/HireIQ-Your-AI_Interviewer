@@ -1,5 +1,34 @@
+import { getCurrentUser } from "@/lib/actions/auth.action";
+import { enforceRateLimit } from "@/lib/rate-limit";
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return Response.json(
+        { success: false, error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+    const rateLimit = await enforceRateLimit({
+      namespace: "speech-to-text",
+      key: user.id,
+      limit: 300,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!rateLimit.allowed) {
+      return Response.json(
+        { success: false, error: "Rate limit exceeded. Please try again later." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
     const apiKey = process.env.DEEPGRAM_API_KEY;
     if (!apiKey) {
       return Response.json({ success: false, error: "Missing DEEPGRAM_API_KEY" }, { status: 500 });
@@ -33,8 +62,11 @@ export async function POST(request: Request) {
       "";
 
     return Response.json({ success: true, transcript }, { status: 200 });
-  } catch (e: any) {
-    console.error("/api/speech-to-text error:", e);
-    return Response.json({ success: false, error: String(e) }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("/api/speech-to-text error:", error);
+    return Response.json(
+      { success: false, error: getErrorMessage(error) },
+      { status: 500 }
+    );
   }
 }

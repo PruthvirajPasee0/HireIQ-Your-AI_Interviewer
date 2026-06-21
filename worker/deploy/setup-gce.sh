@@ -55,6 +55,7 @@ if [ ! -f "$WORKER_DIR/.env" ]; then
 FIREBASE_PROJECT_ID=ai-interviewer-pulse
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk-fbsvc@ai-interviewer-pulse.iam.gserviceaccount.com
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...PASTE FULL KEY WITH \\n NEWLINES...\n-----END PRIVATE KEY-----\n"
+LIVE_INTERVIEW_RUNTIME=worker
 
 # === Attendee.dev ===
 ATTENDEE_CLOUD_BASE_URL=https://app.attendee.dev

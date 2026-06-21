@@ -7,24 +7,15 @@ import DisplayTechIcons from "./DisplayTechIcons";
 import { MessageSquareText, Play } from "lucide-react";
 
 import { cn, getRandomInterviewCover } from "@/lib/utils";
-import { getFeedbackByInterviewId } from "@/lib/actions/general.action";
 
-const InterviewCard = async ({
+const InterviewCard = ({
   interviewId,
-  userId,
   role,
   type,
   techstack,
   createdAt,
+  feedback,
 }: InterviewCardProps) => {
-  const feedback =
-    userId && interviewId
-      ? await getFeedbackByInterviewId({
-          interviewId,
-          userId,
-        })
-      : null;
-
   const normalizedType = /mix/gi.test(type) ? "Mixed" : type;
 
   const badgeColor =
@@ -133,7 +124,7 @@ const InterviewCard = async ({
                 />
               </div>
               
-              <Button className="btn-primary w-full sm:w-auto">
+              <Button asChild className="btn-primary w-full sm:w-auto">
                 <PrefetchLink
                   href={
                     feedback

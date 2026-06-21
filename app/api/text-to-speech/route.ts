@@ -1,8 +1,43 @@
+import { getCurrentUser } from "@/lib/actions/auth.action";
+import { enforceRateLimit } from "@/lib/rate-limit";
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return Response.json(
+        { success: false, error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+    const rateLimit = await enforceRateLimit({
+      namespace: "text-to-speech",
+      key: user.id,
+      limit: 400,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!rateLimit.allowed) {
+      return Response.json(
+        { success: false, error: "Rate limit exceeded. Please try again later." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
     const { text, voice: bodyVoice, format = "mp3" } = await request.json();
     if (!text) {
       return Response.json({ success: false, error: "Missing text" }, { status: 400 });
+    }
+    if (String(text).length > 1000) {
+      return Response.json(
+        { success: false, error: "Text too long" },
+        { status: 400 }
+      );
     }
 
     const apiKey = process.env.DEEPGRAM_API_KEY;
@@ -36,8 +71,11 @@ export async function POST(request: Request) {
         "Cache-Control": "no-store",
       },
     });
-  } catch (e: any) {
-    console.error("/api/text-to-speech error:", e);
-    return Response.json({ success: false, error: String(e) }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("/api/text-to-speech error:", error);
+    return Response.json(
+      { success: false, error: getErrorMessage(error) },
+      { status: 500 }
+    );
   }
 }

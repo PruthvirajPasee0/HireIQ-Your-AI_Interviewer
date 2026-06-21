@@ -91,7 +91,7 @@ export async function getFeedbackByInterviewId(
 
     const feedbackDoc = querySnapshot.docs[0];
     return { id: feedbackDoc.id, ...feedbackDoc.data() } as Feedback;
-  } catch (e) {
+  } catch {
     // Fallback without orderBy to avoid composite index requirement
     const fallbackSnap = await db
       .collection("feedback")
@@ -110,6 +110,39 @@ export async function getFeedbackByInterviewId(
     );
     return items[0];
   }
+}
+
+export async function getLatestFeedbackByInterviewIds(params: {
+  userId: string;
+  interviewIds: string[];
+}): Promise<Record<string, Feedback>> {
+  const { userId, interviewIds } = params;
+  const uniqueIds = Array.from(new Set(interviewIds.filter(Boolean)));
+  if (!userId || uniqueIds.length === 0) return {};
+
+  const feedbackByInterviewId: Record<string, Feedback> = {};
+
+  for (let i = 0; i < uniqueIds.length; i += 10) {
+    const chunk = uniqueIds.slice(i, i + 10);
+    const snap = await db
+      .collection("feedback")
+      .where("userId", "==", userId)
+      .where("interviewId", "in", chunk)
+      .get();
+
+    for (const doc of snap.docs) {
+      const feedback = { id: doc.id, ...doc.data() } as Feedback;
+      const existing = feedbackByInterviewId[feedback.interviewId];
+      if (
+        !existing ||
+        String(feedback.createdAt).localeCompare(String(existing.createdAt)) > 0
+      ) {
+        feedbackByInterviewId[feedback.interviewId] = feedback;
+      }
+    }
+  }
+
+  return feedbackByInterviewId;
 }
 
 export async function getLatestInterviews(

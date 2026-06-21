@@ -18,7 +18,7 @@ const schema = z.object({
   techstack: z.string().min(1),
 });
 
-export default function InterviewForm({ userId }: { userId: string }) {
+export default function InterviewForm() {
   const router = useRouter();
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -36,7 +36,7 @@ export default function InterviewForm({ userId }: { userId: string }) {
       const res = await fetch("/api/generate-interview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, userid: userId }),
+        body: JSON.stringify(values),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed");
@@ -44,8 +44,8 @@ export default function InterviewForm({ userId }: { userId: string }) {
       toast.success("Interview generated");
       try { router.prefetch(`/interview/${data.id}`); } catch {}
       router.push(`/interview/${data.id}`);
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to generate interview");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to generate interview");
     }
   };
 
@@ -118,8 +118,9 @@ export default function InterviewForm({ userId }: { userId: string }) {
             <Button
               className="btn w-full mt-4"
               type="submit"
+              disabled={form.formState.isSubmitting}
             >
-              Generate Interview
+              {form.formState.isSubmitting ? "Generating..." : "Generate Interview"}
             </Button>
           </form>
         </Form>

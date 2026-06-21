@@ -11,23 +11,54 @@ import {
   ChevronsLeft,
   ChevronsRight,
   History,
+  UserPlus,
+  CalendarPlus,
 } from "lucide-react";
 import React, { useState } from "react";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/interview", label: "Interviews", icon: ListChecks },
-  { href: "/taken", label: "Taken Interviews", icon: History },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
+type NavVariant = "candidate" | "recruiter";
+
+type NavItem = {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  activePrefixes?: string[];
+};
+
+const navItemsByVariant: Record<NavVariant, NavItem[]> = {
+  candidate: [
+    { href: "/dashboard", label: "Dashboard", icon: Home },
+    { href: "/interview", label: "Interviews", icon: ListChecks, activePrefixes: ["/interview"] },
+    { href: "/taken", label: "Taken Interviews", icon: History, activePrefixes: ["/taken"] },
+    { href: "/settings", label: "Settings", icon: Settings, activePrefixes: ["/settings"] },
+  ],
+  recruiter: [
+    { href: "/recruiter", label: "Dashboard", icon: Home },
+    {
+      href: "/recruiter/agents/new",
+      label: "New Agent",
+      icon: UserPlus,
+      activePrefixes: ["/recruiter/agents"],
+    },
+    {
+      href: "/recruiter/sessions/new",
+      label: "Schedule Interview",
+      icon: CalendarPlus,
+      activePrefixes: ["/recruiter/sessions"],
+    },
+  ],
+};
 
 type SidebarProps = {
   user?: (Partial<User> & { profileURL?: string }) | null;
+  variant?: NavVariant;
 };
 
-export default function Sidebar({ user }: SidebarProps) {
+export default function Sidebar({ user, variant = "candidate" }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const navItems = navItemsByVariant[variant];
+  const homeHref = variant === "recruiter" ? "/recruiter" : "/dashboard";
 
   // Update the data attribute on the main content area when sidebar state changes
   React.useEffect(() => {
@@ -44,7 +75,7 @@ export default function Sidebar({ user }: SidebarProps) {
       }`}
     >
       <div className="flex items-center justify-between">
-        <PrefetchLink href="/dashboard" className="flex items-center gap-2 px-2">
+        <PrefetchLink href={homeHref} className="flex items-center gap-2 px-2">
           <Image src="/logo.svg" alt="Hireiq.ai" width={32} height={28} />
           {!collapsed && <h2 className="text-primary-100">Hireiq.ai</h2>}
         </PrefetchLink>
@@ -64,9 +95,10 @@ export default function Sidebar({ user }: SidebarProps) {
 
       <nav className="mt-2 flex-1">
         <ul className="space-y-1 list-none m-0 p-0">
-          {navItems.map(({ href, label, icon: Icon }) => {
-            const active =
-              pathname === href || (href !== "/dashboard" && pathname?.startsWith(href));
+          {navItems.map(({ href, label, icon: Icon, activePrefixes }) => {
+            const active = activePrefixes
+              ? activePrefixes.some((prefix) => pathname?.startsWith(prefix))
+              : pathname === href;
             return (
               <li key={href}>
                 <PrefetchLink

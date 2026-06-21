@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
+import { signOut } from "@/lib/actions/auth.action";
 
 export default async function SignOutPage() {
-  redirect("/api/sign-out");
+  await signOut();
+  redirect("/sign-in");
 }

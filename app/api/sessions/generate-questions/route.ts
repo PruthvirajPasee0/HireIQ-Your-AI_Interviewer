@@ -4,6 +4,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/actions/auth.action";
 import { getAgentById } from "@/lib/actions/agents.action";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 // PDFs can take a few seconds for Gemini to process.
@@ -26,6 +27,21 @@ export async function POST(req: NextRequest) {
     if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
     if (user.role !== "recruiter")
       return Response.json({ error: "Recruiter only" }, { status: 403 });
+    const rateLimit = await enforceRateLimit({
+      namespace: "sessions-generate-questions",
+      key: user.id,
+      limit: 40,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!rateLimit.allowed) {
+      return Response.json(
+        { error: "Rate limit exceeded. Please try again later." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        }
+      );
+    }
 
     const form = await req.formData();
     const file = form.get("resume");
@@ -42,6 +58,8 @@ export async function POST(req: NextRequest) {
     const agent = await getAgentById(agentId);
     if (!agent)
       return Response.json({ error: "Agent not found" }, { status: 404 });
+    if (agent.ownerRecruiterId !== user.id)
+      return Response.json({ error: "Forbidden" }, { status: 403 });
 
     if (file.size > 8 * 1024 * 1024)
       return Response.json({ error: "Resume must be under 8 MB" }, { status: 400 });

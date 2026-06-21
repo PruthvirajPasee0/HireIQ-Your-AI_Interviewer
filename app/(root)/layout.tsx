@@ -2,14 +2,12 @@ import { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
-import { isAuthenticated, getCurrentUser } from "@/lib/actions/auth.action";
+import { getCurrentUser } from "@/lib/actions/auth.action";
 import RoutePrefetcher from "@/components/RoutePrefetcher";
 
 const Layout = async ({ children }: { children: ReactNode }) => {
-  const isUserAuthenticated = await isAuthenticated();
-  if (!isUserAuthenticated) redirect("/sign-in");
-
   const user = await getCurrentUser();
+  if (!user) redirect("/sign-in");
 
   return (
     <div className="dashboard-bg min-h-screen">
@@ -19,7 +17,7 @@ const Layout = async ({ children }: { children: ReactNode }) => {
       />
       {/* Fixed Sidebar on desktop */}
       <div className="hidden md:block fixed left-0 top-0 h-screen z-30">
-        <Sidebar user={user as any} />
+        <Sidebar user={user} />
       </div>
 
       {/* Content area with dynamic padding based on sidebar state */}
@@ -31,7 +29,7 @@ const Layout = async ({ children }: { children: ReactNode }) => {
           <main className="flex flex-col gap-6">
             {/* Mobile header */}
             <div className="md:hidden">
-              <MobileNav user={user as any} />
+              <MobileNav user={user} />
             </div>
             {children}
           </main>

@@ -18,14 +18,29 @@ import type {
   TranscriptTurn,
 } from "./types";
 
-// Tuned for responsiveness. Each turn is gated by:
-//   POLL_INTERVAL_MS (how often we hit Attendee's transcript endpoint)
-//   + CANDIDATE_TURN_SILENCE_MS (how long the candidate must be quiet before
-//     we consider their turn complete and reply).
-// Lower = snappier. Too low = we cut the candidate off mid-thought.
+// Turn-taking gate:
+//   POLL_INTERVAL_MS (how often we hit transcript endpoint)
+//   + text-silence heuristics (since this function runtime does not receive
+//     realtime acoustic speech_start/speech_stop events).
 const POLL_INTERVAL_MS = 1000;
-const CANDIDATE_TURN_SILENCE_MS = 1500;
+const CANDIDATE_TURN_SILENCE_MS = 3500;
+const MID_THOUGHT_SILENCE_MS = 6000;
+const PRE_SPEAK_PAUSE_MS = 500;
+const STUCK_SILENCE_MS = 12000;
 const END_TOKEN = "<END_INTERVIEW>";
+
+const FILLERS = new Set([
+  "um", "uh", "umm", "uhh", "uhm", "er", "erm", "hmm", "hm", "mm", "mhm",
+  "ah", "eh", "like", "well",
+]);
+
+const TRAILING_INCOMPLETE = new Set([
+  ...FILLERS,
+  "and", "or", "but", "so", "because", "if", "then", "that", "which", "who",
+  "the", "a", "an", "of", "in", "on", "at", "to", "for", "with", "using",
+  "from", "by", "about", "into", "is", "was", "were", "are", "am", "be",
+  "my", "your", "his", "her", "its", "our", "their", "i", "we", "you", "it",
+]);
 
 export class SessionRunner {
   private readonly sessionId: string;
@@ -224,7 +239,26 @@ export class SessionRunner {
   private turnComplete(): boolean {
     if (this.pendingChunks.length === 0) return false;
     if (this.lastChunkAt === null) return false;
-    return Date.now() - this.lastChunkAt > CANDIDATE_TURN_SILENCE_MS;
+    const silence = Date.now() - this.lastChunkAt;
+
+    const combined = this.pendingChunks.map((c) => c.text).join(" ");
+    const words = combined
+      .toLowerCase()
+      .split(/\s+/)
+      .map((w) => w.replace(/[^a-z']/g, ""))
+      .filter((w) => w.length > 0);
+
+    const meaningful = words.filter((w) => !FILLERS.has(w));
+    if (meaningful.length === 0) {
+      return silence > STUCK_SILENCE_MS;
+    }
+
+    const lastWord = words[words.length - 1];
+    const threshold = TRAILING_INCOMPLETE.has(lastWord)
+      ? MID_THOUGHT_SILENCE_MS
+      : CANDIDATE_TURN_SILENCE_MS;
+
+    return silence > threshold;
   }
 
   /**
@@ -283,6 +317,14 @@ export class SessionRunner {
 
     if (cleanReply.length > 0) {
       logger.info({ reply: cleanReply.slice(0, 120) }, "agent turn");
+      await sleep(PRE_SPEAK_PAUSE_MS);
+      if (!pendingInjection && !pendingAction && this.pendingChunks.length > 0) {
+        logger.info(
+          { sessionId: this.sessionId },
+          "new candidate chunks arrived during pre-speak pause; yielding turn",
+        );
+        return "";
+      }
       const audio = await synth(cleanReply, this.agent.voiceProfile);
       if (this.handle) {
         await this.provider.outputAudio(this.handle, audio);

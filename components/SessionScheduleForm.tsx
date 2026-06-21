@@ -2,12 +2,13 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { createInterviewSession } from "@/lib/actions/sessions.action";
 
 const inputCls =
-  "input w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200";
+  "input w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-transparent transition-all duration-200";
 const labelCls = "label text-white font-medium tracking-wide block mb-2";
 
 type AgentOption = Pick<Agent, "id" | "name" | "targetRole" | "level">;
@@ -147,7 +148,9 @@ export default function SessionScheduleForm({ recruiterId, agents }: Props) {
       <div className="glass-card p-6 rounded-xl border border-white/10 bg-white/[0.06]">
         <p>You need to create an AI Interviewer Agent first.</p>
         <Button asChild className="btn-primary mt-4">
-          <a href="/recruiter/agents/new">Create Agent</a>
+          <Link href="/recruiter/agents/new" prefetch>
+            Create Agent
+          </Link>
         </Button>
       </div>
     );

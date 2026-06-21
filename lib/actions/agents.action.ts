@@ -55,13 +55,17 @@ export async function createAgent(params: CreateAgentParams) {
   return { success: true, agentId: ref.id } as const;
 }
 
-export async function getAgentsByRecruiter(): Promise<Agent[]> {
-  const user = await getCurrentUser();
-  if (!user || user.role !== "recruiter") return [];
+export async function getAgentsByRecruiter(recruiterId?: string): Promise<Agent[]> {
+  let resolvedRecruiterId = recruiterId;
+  if (!resolvedRecruiterId) {
+    const user = await getCurrentUser();
+    if (!user || user.role !== "recruiter") return [];
+    resolvedRecruiterId = user.id;
+  }
 
   const snap = await db
     .collection(AGENTS)
-    .where("ownerRecruiterId", "==", user.id)
+    .where("ownerRecruiterId", "==", resolvedRecruiterId)
     .get();
 
   const agents = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Agent[];

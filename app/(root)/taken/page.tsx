@@ -3,7 +3,10 @@ import Link from "next/link";
 import InterviewCard from "@/components/InterviewCard";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/actions/auth.action";
-import { getInterviewsByUserId } from "@/lib/actions/general.action";
+import {
+  getInterviewsByUserId,
+  getLatestFeedbackByInterviewIds,
+} from "@/lib/actions/general.action";
 
 const TakenInterviewsPage = async () => {
   const user = await getCurrentUser();
@@ -13,13 +16,17 @@ const TakenInterviewsPage = async () => {
       <div className="flex flex-col items-center gap-4">
         <p>Please sign in to view your taken interviews.</p>
         <Button asChild className="btn-primary">
-          <Link href="/" prefetch>Go to Dashboard</Link>
+          <Link href="/dashboard" prefetch>Go to Dashboard</Link>
         </Button>
       </div>
     );
   }
 
   const userInterviews = await getInterviewsByUserId(user.id);
+  const feedbackByInterviewId = await getLatestFeedbackByInterviewIds({
+    userId: user.id,
+    interviewIds: (userInterviews ?? []).map((interview) => interview.id),
+  });
   const hasPastInterviews = (userInterviews?.length || 0) > 0;
 
   return (
@@ -37,12 +44,12 @@ const TakenInterviewsPage = async () => {
             {userInterviews?.map((interview) => (
               <div key={interview.id} className="transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/20">
                 <InterviewCard
-                  userId={user.id}
                   interviewId={interview.id}
                   role={interview.role}
                   type={interview.type}
                   techstack={interview.techstack}
                   createdAt={interview.createdAt}
+                  feedback={feedbackByInterviewId[interview.id] ?? null}
                 />
               </div>
             ))}

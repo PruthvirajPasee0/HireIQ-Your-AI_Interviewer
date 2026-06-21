@@ -20,12 +20,19 @@ type SettingsFormValues = {
   profileURL: string;
 };
 
-export default function SettingsForm({ user }: { user: Partial<User> | null }) {
+const inputCls =
+  "input w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-transparent transition-all duration-200";
+
+export default function SettingsForm({
+  user,
+}: {
+  user: (Partial<User> & { profileURL?: string }) | null;
+}) {
   const router = useRouter();
   const form = useForm<SettingsFormValues>({
     defaultValues: {
       name: user?.name || "",
-      profileURL: (user as any)?.profileURL || "",
+      profileURL: user?.profileURL || "",
     },
   });
 
@@ -44,8 +51,8 @@ export default function SettingsForm({ user }: { user: Partial<User> | null }) {
         throw new Error(json.message || "Failed to update");
       toast.success("Profile updated");
       router.refresh();
-    } catch (e: any) {
-      toast.error(e.message || "Update failed");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Update failed");
     } finally {
       setSubmitting(false);
     }
@@ -53,15 +60,17 @@ export default function SettingsForm({ user }: { user: Partial<User> | null }) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
         <FormField
           control={form.control}
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Name</FormLabel>
+              <FormLabel className="label text-white font-medium tracking-wide">
+                Name
+              </FormLabel>
               <FormControl>
-                <Input placeholder="Your name" {...field} />
+                <Input className={inputCls} placeholder="Your name" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -73,9 +82,11 @@ export default function SettingsForm({ user }: { user: Partial<User> | null }) {
           name="profileURL"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Profile picture URL</FormLabel>
+              <FormLabel className="label text-white font-medium tracking-wide">
+                Profile picture URL
+              </FormLabel>
               <FormControl>
-                <Input placeholder="https://..." {...field} />
+                <Input className={inputCls} placeholder="https://..." {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -83,7 +94,7 @@ export default function SettingsForm({ user }: { user: Partial<User> | null }) {
         />
 
         <div className="flex gap-2">
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting} className="btn-primary">
             {submitting ? "Saving..." : "Save changes"}
           </Button>
         </div>

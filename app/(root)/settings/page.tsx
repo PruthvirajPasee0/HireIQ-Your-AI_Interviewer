@@ -6,6 +6,8 @@ import SettingsForm from "@/components/SettingsForm";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
+  const profileURL = (user as (Partial<User> & { profileURL?: string }) | null)
+    ?.profileURL;
 
   return (
     <div className="flex flex-col gap-6">
@@ -14,7 +16,7 @@ export default async function SettingsPage() {
       <section className="glass-panel p-6">
         <div className="flex items-center gap-4">
           <Image
-            src={(user as any)?.profileURL || "/ai-avatar.png"}
+            src={profileURL || "/ai-avatar.png"}
             alt={user?.name || "User"}
             width={64}
             height={64}

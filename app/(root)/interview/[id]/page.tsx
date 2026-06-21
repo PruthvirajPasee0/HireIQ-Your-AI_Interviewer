@@ -1,12 +1,17 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
+import dynamic from "next/dynamic";
 
-import InterviewRunner from "@/components/InterviewRunner";
 import { getRandomInterviewCover } from "@/lib/utils";
 
 import { getInterviewById } from "@/lib/actions/general.action";
 import { getCurrentUser } from "@/lib/actions/auth.action";
 import DisplayTechIcons from "@/components/DisplayTechIcons";
+import { db } from "@/firebase/admin";
+
+const InterviewRunner = dynamic(() => import("@/components/InterviewRunner"), {
+  ssr: false,
+});
 
 const InterviewDetails = async ({ params }: RouteParams) => {
   const { id } = await params;
@@ -15,7 +20,27 @@ const InterviewDetails = async ({ params }: RouteParams) => {
     getCurrentUser(),
     getInterviewById(id),
   ]);
-  if (!interview) redirect("/");
+  if (!user) redirect("/sign-in");
+  if (!interview) redirect("/dashboard");
+
+  // Community interview templates are read-only. Clone to the current user
+  // before running so feedback and transcript ownership stays strict.
+  if (interview.userId !== user.id) {
+    const clonedInterview: Omit<Interview, "id"> = {
+      role: interview.role,
+      type: interview.type,
+      techstack: interview.techstack,
+      level: interview.level,
+      questions: interview.questions,
+      userId: user.id,
+      finalized: true,
+      coverImage: interview.coverImage,
+      createdAt: new Date().toISOString(),
+    };
+
+    const clonedDoc = await db.collection("interviews").add(clonedInterview);
+    redirect(`/interview/${clonedDoc.id}`);
+  }
 
   // Feedback is created at the end of the interview by InterviewRunner
 
@@ -43,8 +68,7 @@ const InterviewDetails = async ({ params }: RouteParams) => {
       </div>
 
       <InterviewRunner
-        userName={user?.name!}
-        userId={user?.id}
+        userName={user.name}
         interviewId={id}
         questions={interview.questions}
       />

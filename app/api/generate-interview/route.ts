@@ -3,13 +3,37 @@ import { google } from "@ai-sdk/google";
 
 import { db } from "@/firebase/admin";
 import { getRandomInterviewCover } from "@/lib/utils";
+import { getCurrentUser } from "@/lib/actions/auth.action";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    const { type, role, level, techstack, amount, userid } =
-      await request.json();
+    const { type, role, level, techstack, amount } = await request.json();
 
-    if (!userid || !role || !level || !type || !amount || !techstack) {
+    const user = await getCurrentUser();
+    if (!user) {
+      return Response.json(
+        { success: false, error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+    const rateLimit = await enforceRateLimit({
+      namespace: "generate-interview",
+      key: user.id,
+      limit: 20,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!rateLimit.allowed) {
+      return Response.json(
+        { success: false, error: "Rate limit exceeded. Please try again later." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
+    if (!role || !level || !type || !amount || !techstack) {
       return Response.json(
         { success: false, error: "Missing required fields" },
         { status: 400 }
@@ -72,7 +96,7 @@ export async function POST(request: Request) {
         .map((t) => t.trim())
         .filter(Boolean),
       questions: finalQuestions,
-      userId: userid as string,
+      userId: user.id,
       finalized: true,
       coverImage: getRandomInterviewCover(),
       createdAt: new Date().toISOString(),

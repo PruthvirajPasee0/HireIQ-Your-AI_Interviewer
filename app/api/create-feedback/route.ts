@@ -3,17 +3,73 @@ import { google } from "@ai-sdk/google";
 
 import { db } from "@/firebase/admin";
 import { feedbackSchema } from "@/constants";
+import { getCurrentUser } from "@/lib/actions/auth.action";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    const { interviewId, userId, transcript, feedbackId } =
-      await request.json();
+    const { interviewId, transcript, feedbackId } = await request.json();
 
-    if (!interviewId || !userId || !Array.isArray(transcript)) {
+    const user = await getCurrentUser();
+    if (!user) {
+      return Response.json(
+        { success: false, error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+    const rateLimit = await enforceRateLimit({
+      namespace: "create-feedback",
+      key: user.id,
+      limit: 40,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!rateLimit.allowed) {
+      return Response.json(
+        { success: false, error: "Rate limit exceeded. Please try again later." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
+    if (!interviewId || !Array.isArray(transcript)) {
       return Response.json(
         { success: false, error: "Missing required fields" },
         { status: 400 }
       );
+    }
+
+    const interviewDoc = await db.collection("interviews").doc(interviewId).get();
+    if (!interviewDoc.exists) {
+      return Response.json(
+        { success: false, error: "Interview not found" },
+        { status: 404 }
+      );
+    }
+
+    const interview = interviewDoc.data() as Interview;
+    if (interview.userId !== user.id) {
+      return Response.json(
+        { success: false, error: "Forbidden" },
+        { status: 403 }
+      );
+    }
+
+    if (feedbackId) {
+      const existingFeedbackDoc = await db.collection("feedback").doc(feedbackId).get();
+      if (existingFeedbackDoc.exists) {
+        const existingFeedback = existingFeedbackDoc.data() as Partial<Feedback>;
+        if (
+          existingFeedback.userId !== user.id ||
+          existingFeedback.interviewId !== interviewId
+        ) {
+          return Response.json(
+            { success: false, error: "Feedback ownership mismatch" },
+            { status: 403 }
+          );
+        }
+      }
     }
 
     const formattedTranscript = (
@@ -43,7 +99,7 @@ export async function POST(request: Request) {
 
     const feedback = {
       interviewId,
-      userId,
+      userId: user.id,
       totalScore: object.totalScore,
       categoryScores: object.categoryScores,
       strengths: object.strengths,

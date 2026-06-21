@@ -3,6 +3,11 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+type WindowWithRIC = Window &
+  typeof globalThis & {
+    requestIdleCallback?: (callback: () => void) => number;
+  };
+
 export default function RoutePrefetcher({ routes }: { routes: string[] }) {
   const router = useRouter();
   useEffect(() => {
@@ -12,8 +17,9 @@ export default function RoutePrefetcher({ routes }: { routes: string[] }) {
       });
     };
     // Defer to idle to avoid competing with critical rendering
-    if (typeof (window as any).requestIdleCallback === "function") {
-      (window as any).requestIdleCallback(prefetchAll);
+    const win = window as WindowWithRIC;
+    if (typeof win.requestIdleCallback === "function") {
+      win.requestIdleCallback(prefetchAll);
     } else {
       setTimeout(prefetchAll, 0);
     }
