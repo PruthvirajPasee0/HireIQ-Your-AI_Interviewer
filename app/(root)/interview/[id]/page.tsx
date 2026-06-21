@@ -1,17 +1,13 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import dynamic from "next/dynamic";
 
 import { getRandomInterviewCover } from "@/lib/utils";
 
 import { getInterviewById } from "@/lib/actions/general.action";
 import { getCurrentUser } from "@/lib/actions/auth.action";
 import DisplayTechIcons from "@/components/DisplayTechIcons";
+import InterviewRunner from "@/components/InterviewRunner";
 import { db } from "@/firebase/admin";
-
-const InterviewRunner = dynamic(() => import("@/components/InterviewRunner"), {
-  ssr: false,
-});
 
 const InterviewDetails = async ({ params }: RouteParams) => {
   const { id } = await params;
